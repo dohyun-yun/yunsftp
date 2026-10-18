@@ -86,6 +86,24 @@ public class ConnectionManager: ObservableObject {
         }
     }
 
+    public func connection(for id: UUID) -> RemoteConnection? {
+        connections.first(where: { $0.id == id })
+    }
+
+    public func binding(for id: UUID) -> Binding<RemoteConnection>? {
+        guard connections.contains(where: { $0.id == id }) else { return nil }
+        return Binding<RemoteConnection>(
+            get: {
+                self.connections.first(where: { $0.id == id }) ?? RemoteConnection(id: id, name: "", host: "")
+            },
+            set: { updated in
+                if let idx = self.connections.firstIndex(where: { $0.id == id }) {
+                    self.connections[idx] = updated
+                }
+            }
+        )
+    }
+
     public func deleteConnection(id: UUID) {
         connections.removeAll { $0.id == id }
         testResults.removeValue(forKey: id)

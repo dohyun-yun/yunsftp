@@ -395,10 +395,8 @@ public class PaneModel: ObservableObject, Identifiable {
     /// Toggles selection ON/OFF on the currently focused item when pressing Space.
     /// Allows moving the cursor with Up/Down arrows and pressing Space to select/deselect multiple individual files.
     public func toggleSelectionAtFocus() {
-        let list = displayedItems
-        guard !list.isEmpty else { return }
-
-        let targetURL = focusedItemURL ?? selectedItemURLs.first ?? list[0].url
+        guard let fallbackURL = displayedItems.first?.url else { return }
+        let targetURL = focusedItemURL ?? selectedItemURLs.first ?? fallbackURL
         focusedItemURL = targetURL
         selectionAnchorURL = targetURL
 

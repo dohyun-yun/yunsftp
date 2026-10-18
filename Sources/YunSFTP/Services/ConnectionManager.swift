@@ -1,0 +1,149 @@
+import Foundation
+import AppKit
+import SwiftUI
+
+@MainActor
+public class ConnectionManager: ObservableObject {
+    public static let shared = ConnectionManager()
+
+    @Published public var connections: [RemoteConnection] = [] {
+        didSet {
+            saveConnections()
+        }
+    }
+    @Published public var isTesting: [UUID: Bool] = [:]
+    @Published public var testResults: [UUID: ConnectionTestResult] = [:]
+
+    private let storageKey = "yunsftp_SavedConnections"
+    private let legacyStorageKey = "ForkLiftSilicon_SavedConnections"
+    private let migrationDoneKey = "yunsftp_MigrationDone"
+    private let legacyMigrationDoneKey = "ForkLiftSilicon_MigrationDone"
+
+    public init() {
+        loadConnections()
+        checkAndPerformAutoMigration()
+    }
+
+    public func loadConnections() {
+        if let data = UserDefaults.standard.data(forKey: storageKey),
+           let list = try? JSONDecoder().decode([RemoteConnection].self, from: data) {
+            self.connections = list
+            return
+        }
+        if let data = UserDefaults.standard.data(forKey: legacyStorageKey),
+           let list = try? JSONDecoder().decode([RemoteConnection].self, from: data) {
+            self.connections = list
+            saveConnections()
+            return
+        }
+    }
+
+    public func saveConnections() {
+        if let data = try? JSONEncoder().encode(connections) {
+            UserDefaults.standard.set(data, forKey: storageKey)
+        }
+    }
+
+    public func checkAndPerformAutoMigration() {
+        let migrationDone = UserDefaults.standard.bool(forKey: migrationDoneKey) || UserDefaults.standard.bool(forKey: legacyMigrationDoneKey)
+        if !migrationDone && connections.isEmpty {
+            let result = MigrationService.shared.migrateFromForkLift2()
+            if !result.importedConnections.isEmpty {
+                self.connections = result.importedConnections
+                saveConnections()
+            }
+            UserDefaults.standard.set(true, forKey: migrationDoneKey)
+        }
+    }
+
+    public func importFromForkLift2Manually() -> (connectionsCount: Int, favoritesCount: Int) {
+        let result = MigrationService.shared.migrateFromForkLift2()
+        var addedConns = 0
+
+        for conn in result.importedConnections {
+            if !connections.contains(where: { $0.host == conn.host && $0.port == conn.port }) {
+                connections.append(conn)
+                addedConns += 1
+            }
+        }
+
+        if addedConns > 0 {
+            saveConnections()
+        }
+
+        return (addedConns, result.importedFavorites.count)
+    }
+
+    public func addConnection(_ connection: RemoteConnection) {
+        connections.append(connection)
+        saveConnections()
+    }
+
+    public func updateConnection(_ connection: RemoteConnection) {
+        if let idx = connections.firstIndex(where: { $0.id == connection.id }) {
+            connections[idx] = connection
+            saveConnections()
+        }
+    }
+
+    public func deleteConnection(id: UUID) {
+        connections.removeAll { $0.id == id }
+        testResults.removeValue(forKey: id)
+        isTesting.removeValue(forKey: id)
+        saveConnections()
+    }
+
+    public func duplicateConnection(_ connection: RemoteConnection) {
+        var copy = connection
+        copy.id = UUID()
+        copy.name = "\(connection.name) Copy"
+        connections.append(copy)
+        saveConnections()
+    }
+
+    public func testConnection(_ connection: RemoteConnection) async -> ConnectionTestResult {
+        isTesting[connection.id] = true
+
+        let isSSH = (connection.connectionProtocol == .sftp)
+        let res = await ConnectionTestService.shared.testConnection(
+            host: connection.host,
+            port: connection.port,
+            isSSH: isSSH
+        )
+
+        testResults[connection.id] = res
+        isTesting[connection.id] = false
+
+        // Update connection metadata
+        if let idx = connections.firstIndex(where: { $0.id == connection.id }) {
+            connections[idx].lastTestedDate = Date()
+            connections[idx].lastTestStatusSummary = res.isSuccess ? "Success (\(Int(res.latencyMs))ms)" : "Failed"
+            saveConnections()
+        }
+
+        return res
+    }
+
+    public func openSSHTerminal(for connection: RemoteConnection) {
+        guard !connection.host.isEmpty else { return }
+
+        let userPart = connection.username.isEmpty ? "" : "\(connection.username)@"
+        var sshCmd = "ssh -p \(connection.port) \(userPart)\(connection.host)"
+
+        if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
+            sshCmd = "ssh -i \(connection.keyFilePath) -p \(connection.port) \(userPart)\(connection.host)"
+        }
+
+        let script = """
+        tell application "Terminal"
+            activate
+            do script "\(sshCmd)"
+        end tell
+        """
+
+        if let appleScript = NSAppleScript(source: script) {
+            var error: NSDictionary?
+            appleScript.executeAndReturnError(&error)
+        }
+    }
+}

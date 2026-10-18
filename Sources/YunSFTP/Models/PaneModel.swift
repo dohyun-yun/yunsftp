@@ -61,13 +61,15 @@ public class PaneModel: ObservableObject, Identifiable {
         return currentURL.path != "/"
     }
 
-    public init(initialURL: URL = FileManager.default.homeDirectoryForCurrentUser) {
+    public init(initialURL: URL = FileManager.default.homeDirectoryForCurrentUser, autoLoad: Bool = true) {
         self.currentURL = initialURL
         let settings = AppSettings.load()
         self.sortField = settings.sortField
         self.sortAscending = settings.sortAscending
         self.viewMode = settings.viewMode
-        navigateTo(initialURL, addToHistory: true)
+        if autoLoad {
+            navigateTo(initialURL, addToHistory: true)
+        }
     }
 
     public func connectRemote(connection: RemoteConnection, password: String? = nil) {

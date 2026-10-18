@@ -64,7 +64,7 @@ public struct FileItem: Identifiable, Hashable, Sendable {
         }
     }
 
-    public init(virtualURL: URL, name: String, isDirectory: Bool, isSymlink: Bool = false, size: Int64, modificationDate: Date, permissions: String) {
+    public init(virtualURL: URL, name: String, isDirectory: Bool, isSymlink: Bool = false, size: Int64, modificationDate: Date, permissions: String, kind: String? = nil) {
         self.url = virtualURL
         self.name = SFTPService.decodeLsEscapes(name).precomposedStringWithCanonicalMapping
         self.isDirectory = isDirectory
@@ -74,7 +74,7 @@ public struct FileItem: Identifiable, Hashable, Sendable {
         self.modificationDate = modificationDate
         self.creationDate = nil
         self.fileExtension = (name as NSString).pathExtension.lowercased()
-        self.kindDescription = isDirectory ? "Remote Folder" : (isSymlink ? "Remote Symlink" : "Remote File")
+        self.kindDescription = kind ?? (isDirectory ? "Remote Folder" : (isSymlink ? "Remote Symlink" : "Remote File"))
         self.posixPermissions = permissions
         self.isHidden = name.hasPrefix(".")
         self.symlinkTarget = nil

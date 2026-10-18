@@ -2,12 +2,21 @@ import SwiftUI
 import AppKit
 
 public struct MainWindowView: View {
-    @StateObject private var leftPane = PaneModel()
-    @StateObject private var rightPane = PaneModel(initialURL: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads"))
+    @StateObject private var leftPane: PaneModel
+    @StateObject private var rightPane: PaneModel
 
-    @State private var activePaneId: UUID = UUID()
+    @State private var activePaneId: UUID
     @State private var isDualPane: Bool = true
-    @State private var customFavorites: [FavoriteLocation] = []
+    @State private var customFavorites: [FavoriteLocation]
+
+    public init(leftPane: PaneModel? = nil, rightPane: PaneModel? = nil, customFavorites: [FavoriteLocation]? = nil) {
+        let lp = leftPane ?? PaneModel()
+        let rp = rightPane ?? PaneModel(initialURL: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads"))
+        _leftPane = StateObject(wrappedValue: lp)
+        _rightPane = StateObject(wrappedValue: rp)
+        _activePaneId = State(initialValue: lp.id)
+        _customFavorites = State(initialValue: customFavorites ?? [])
+    }
 
     // Sheet states
     @State private var previewItem: FileItem? = nil
@@ -190,11 +199,13 @@ public struct MainWindowView: View {
         .frame(minWidth: 800, minHeight: 520)
         .onAppear {
             activePaneId = leftPane.id
-            // Load and migrate ForkLift 2 favorites
-            let result = MigrationService.shared.migrateFromForkLift2()
-            for fav in result.importedFavorites {
-                if !customFavorites.contains(where: { $0.url == fav.url }) {
-                    customFavorites.append(fav)
+            if !DemoHelper.isDemoMode {
+                // Load and migrate ForkLift 2 favorites
+                let result = MigrationService.shared.migrateFromForkLift2()
+                for fav in result.importedFavorites {
+                    if !customFavorites.contains(where: { $0.url == fav.url }) {
+                        customFavorites.append(fav)
+                    }
                 }
             }
         }

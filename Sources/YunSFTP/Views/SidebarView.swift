@@ -149,9 +149,15 @@ public struct SidebarView: View {
 
             // Devices
             Section(header: Text("Devices").font(.system(size: 11, weight: .semibold))) {
-                ForEach(FavoriteLocation.mountedVolumes) { vol in
-                    SidebarItemRow(name: vol.name, iconName: vol.systemIconName) {
-                        onSelectLocation(vol.url)
+                if DemoHelper.isDemoMode {
+                    SidebarItemRow(name: "Macintosh HD", iconName: "internaldrive") {
+                        onSelectLocation(URL(fileURLWithPath: "/"))
+                    }
+                } else {
+                    ForEach(FavoriteLocation.mountedVolumes) { vol in
+                        SidebarItemRow(name: vol.name, iconName: vol.systemIconName) {
+                            onSelectLocation(vol.url)
+                        }
                     }
                 }
             }

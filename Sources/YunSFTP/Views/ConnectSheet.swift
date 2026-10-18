@@ -17,14 +17,9 @@ public struct ConnectSheet: View {
     @State private var isTesting: Bool = false
     @State private var importMessage: String? = nil
 
-    private var selectedIndex: Int? {
-        guard let id = selectedConnectionId else { return nil }
-        return connectionManager.connections.firstIndex(where: { $0.id == id })
-    }
-
     private var selectedConnection: RemoteConnection? {
-        guard let idx = selectedIndex, idx < connectionManager.connections.count else { return nil }
-        return connectionManager.connections[idx]
+        guard let id = selectedConnectionId else { return nil }
+        return connectionManager.connection(for: id)
     }
 
     public var body: some View {
@@ -76,10 +71,7 @@ public struct ConnectSheet: View {
                                     selectedConnectionId = connectionManager.connections.last?.id
                                 }
                                 Button("Delete", role: .destructive) {
-                                    connectionManager.deleteConnection(id: conn.id)
-                                    if selectedConnectionId == conn.id {
-                                        selectedConnectionId = connectionManager.connections.first?.id
-                                    }
+                                    deleteConnectionSafely(id: conn.id)
                                 }
                             }
                         }
@@ -115,249 +107,44 @@ public struct ConnectSheet: View {
             Divider()
 
             // Right Form: Connection Details & Testing
-            if let idx = selectedIndex, idx < connectionManager.connections.count {
-                let conn = connectionManager.connections[idx]
-                VStack(spacing: 14) {
-                    // Header
-                    HStack {
-                        Image(systemName: conn.connectionProtocol.systemIconName)
-                            .font(.title2)
-                            .foregroundColor(.accentColor)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(conn.displayTitle)
-                                .font(.title3.bold())
-                            if conn.isImportedFromForkLift2 {
-                                Text("Migrated from ForkLift 2")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
-                            }
+            // Right Form: Connection Details & Testing
+            if let selectedId = selectedConnectionId,
+               let binding = connectionManager.binding(for: selectedId) {
+                ConnectionDetailEditorView(
+                    connection: binding,
+                    isEditMode: isEditMode,
+                    isTesting: isTesting,
+                    testResult: testResult,
+                    inputPassword: $inputPassword,
+                    savePasswordToKeychain: $savePasswordToKeychain,
+                    onRunTest: {
+                        if let conn = connectionManager.connection(for: selectedId) {
+                            runTest(for: conn)
                         }
-                        Spacer()
-                    }
-
-                    // Configuration Form
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("Name:")
-                                .font(.system(size: 11, weight: .medium))
-                                .frame(width: 80, alignment: .trailing)
-                            TextField("Friendly name", text: $connectionManager.connections[idx].name)
-                                .textFieldStyle(.roundedBorder)
+                    },
+                    onOpenSSHTerminal: {
+                        if let conn = connectionManager.connection(for: selectedId) {
+                            connectionManager.openSSHTerminal(for: conn)
                         }
-
-                        HStack {
-                            Text("Protocol:")
-                                .font(.system(size: 11, weight: .medium))
-                                .frame(width: 80, alignment: .trailing)
-                            Picker("", selection: $connectionManager.connections[idx].connectionProtocol) {
-                                ForEach(ConnectionProtocol.allCases) { proto in
-                                    Text(proto.rawValue).tag(proto)
-                                }
-                            }
-                            .labelsHidden()
-                            .onChange(of: connectionManager.connections[idx].connectionProtocol) { proto in
-                                connectionManager.connections[idx].port = proto.defaultPort
-                            }
+                    },
+                    onDelete: {
+                        deleteConnectionSafely(id: selectedId)
+                    },
+                    onCancel: {
+                        dismiss()
+                    },
+                    onSave: {
+                        if let conn = connectionManager.connection(for: selectedId) {
+                            saveAction(conn: conn)
                         }
-
-                        HStack {
-                            Text("Server:")
-                                .font(.system(size: 11, weight: .medium))
-                                .frame(width: 80, alignment: .trailing)
-                            TextField("host or IP (e.g. synology.me)", text: $connectionManager.connections[idx].host)
-                                .textFieldStyle(.roundedBorder)
-
-                            Text("Port:")
-                                .font(.system(size: 11, weight: .medium))
-
-                            // Pure numeric string binding - guarantees NO commas can ever be typed or displayed
-                            TextField("Port", text: Binding(
-                                get: { String(connectionManager.connections[idx].port) },
-                                set: { newVal in
-                                    let digits = newVal.filter { $0.isNumber }
-                                    if let p = Int(digits) {
-                                        connectionManager.connections[idx].port = p
-                                    } else if digits.isEmpty {
-                                        connectionManager.connections[idx].port = 0
-                                    }
-                                }
-                            ))
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 70)
-                        }
-
-                        HStack {
-                            Text("Username:")
-                                .font(.system(size: 11, weight: .medium))
-                                .frame(width: 80, alignment: .trailing)
-                            TextField("Username", text: $connectionManager.connections[idx].username)
-                                .textFieldStyle(.roundedBorder)
-                        }
-
-                        HStack {
-                            Text("Path:")
-                                .font(.system(size: 11, weight: .medium))
-                                .frame(width: 80, alignment: .trailing)
-                            TextField("/path/to/folder", text: $connectionManager.connections[idx].remotePath)
-                                .textFieldStyle(.roundedBorder)
-                        }
-
-                        if connectionManager.connections[idx].connectionProtocol == .sftp {
-                            HStack {
-                                Text("Auth Type:")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .frame(width: 80, alignment: .trailing)
-                                Picker("", selection: $connectionManager.connections[idx].authType) {
-                                    ForEach(AuthenticationType.allCases) { auth in
-                                        Text(auth.rawValue).tag(auth)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                            }
-
-                            if connectionManager.connections[idx].authType == .sshKey {
-                                HStack {
-                                    Text("Private Key:")
-                                        .font(.system(size: 11, weight: .medium))
-                                        .frame(width: 80, alignment: .trailing)
-                                    TextField("Key file path", text: $connectionManager.connections[idx].keyFilePath)
-                                        .textFieldStyle(.roundedBorder)
-                                    Button("Browse...") {
-                                        selectKeyFile(idx: idx)
-                                    }
-                                    .buttonStyle(.bordered)
-                                }
-                            } else {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack {
-                                        Text("Password:")
-                                            .font(.system(size: 11, weight: .medium))
-                                            .frame(width: 80, alignment: .trailing)
-                                        SecureField("Server password (leave blank to prompt on connect)", text: $inputPassword)
-                                            .textFieldStyle(.roundedBorder)
-                                    }
-
-                                    HStack {
-                                        Spacer().frame(width: 84)
-                                        Toggle("Save password in Keychain", isOn: $savePasswordToKeychain)
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.secondary)
-
-                                        if KeychainService.shared.loadPassword(for: conn) != nil {
-                                            Text("• Saved in Keychain")
-                                                .font(.system(size: 10))
-                                                .foregroundColor(.green)
-                                        }
-                                    }
-                                }
-                            }
+                    },
+                    onConnect: {
+                        if let conn = connectionManager.connection(for: selectedId) {
+                            connectAction(conn: conn)
                         }
                     }
-                    .padding(12)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(8)
-
-                    // Test Connection Box
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Button(action: { runTest(for: connectionManager.connections[idx]) }) {
-                                HStack(spacing: 4) {
-                                    if isTesting {
-                                        ProgressView().scaleEffect(0.6)
-                                    } else {
-                                        Image(systemName: "bolt.fill")
-                                    }
-                                    Text("Test Connection")
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(isTesting || connectionManager.connections[idx].host.isEmpty)
-
-                            if connectionManager.connections[idx].connectionProtocol == .sftp {
-                                Button(action: { connectionManager.openSSHTerminal(for: connectionManager.connections[idx]) }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "terminal")
-                                        Text("Open SSH in Terminal")
-                                    }
-                                }
-                                .buttonStyle(.bordered)
-                                .disabled(connectionManager.connections[idx].host.isEmpty)
-                            }
-
-                            Spacer()
-                        }
-
-                        if let res = testResult {
-                            HStack(alignment: .top, spacing: 6) {
-                                Image(systemName: res.isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                    .foregroundColor(res.isSuccess ? .green : .red)
-                                    .font(.system(size: 14))
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(res.message)
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(res.isSuccess ? .primary : .red)
-
-                                    if let ip = res.resolvedIP {
-                                        Text(verbatim: "IP: \(ip)  •  Latency: \(String(Int(res.latencyMs))) ms")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(res.isSuccess ? Color.green.opacity(0.1) : Color.red.opacity(0.1))
-                            .cornerRadius(6)
-                        }
-                    }
-
-                    Spacer()
-
-                    // Bottom Actions
-                    HStack {
-                        Button("Delete Connection", role: .destructive) {
-                            let idToDelete = connectionManager.connections[idx].id
-                            KeychainService.shared.deletePassword(for: connectionManager.connections[idx])
-                            connectionManager.deleteConnection(id: idToDelete)
-                            selectedConnectionId = connectionManager.connections.first?.id
-                        }
-
-                        Spacer()
-
-                        Button("Cancel") {
-                            dismiss()
-                        }
-                        .keyboardShortcut(.cancelAction)
-
-                        if isEditMode {
-                            Button("Connect") {
-                                connectAction(conn: connectionManager.connections[idx])
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(connectionManager.connections[idx].host.isEmpty)
-
-                            Button("Save") {
-                                saveAction(conn: connectionManager.connections[idx])
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .keyboardShortcut(.defaultAction)
-                        } else {
-                            Button("Save") {
-                                saveAction(conn: connectionManager.connections[idx])
-                            }
-                            .buttonStyle(.bordered)
-
-                            Button("Connect") {
-                                connectAction(conn: connectionManager.connections[idx])
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .keyboardShortcut(.defaultAction)
-                            .disabled(connectionManager.connections[idx].host.isEmpty)
-                        }
-                    }
-                }
-                .padding(20)
+                )
+                .id(selectedId)
             } else {
                 VStack(spacing: 12) {
                     Spacer()
@@ -470,18 +257,21 @@ public struct ConnectSheet: View {
         }
     }
 
-    private func selectKeyFile(idx: Int) {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        let sshPath = ("~/.ssh" as NSString).expandingTildeInPath
-        if FileManager.default.fileExists(atPath: sshPath) {
-            panel.directoryURL = URL(fileURLWithPath: sshPath)
+    private func deleteConnectionSafely(id: UUID) {
+        if let conn = connectionManager.connection(for: id) {
+            KeychainService.shared.deletePassword(for: conn)
         }
-        if panel.runModal() == .OK, let url = panel.url {
-            connectionManager.connections[idx].keyFilePath = url.path
+
+        let remaining = connectionManager.connections.filter { $0.id != id }
+        if selectedConnectionId == id {
+            selectedConnectionId = remaining.first?.id
         }
+
+        testResult = nil
+        inputPassword = ""
+        connectionManager.deleteConnection(id: id)
+
+        loadSavedPasswordForSelection()
     }
 
     private func saveAction(conn: RemoteConnection) {
@@ -516,6 +306,276 @@ public struct ConnectSheet: View {
         let pwd = inputPassword.isEmpty ? nil : inputPassword
         onConnect(conn, pwd)
         dismiss()
+    }
+}
+
+private struct ConnectionDetailEditorView: View {
+    @Binding var connection: RemoteConnection
+    var isEditMode: Bool
+    var isTesting: Bool
+    var testResult: ConnectionTestResult?
+    @Binding var inputPassword: String
+    @Binding var savePasswordToKeychain: Bool
+    var onRunTest: () -> Void
+    var onOpenSSHTerminal: () -> Void
+    var onDelete: () -> Void
+    var onCancel: () -> Void
+    var onSave: () -> Void
+    var onConnect: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            // Header
+            HStack {
+                Image(systemName: connection.connectionProtocol.systemIconName)
+                    .font(.title2)
+                    .foregroundColor(.accentColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(connection.displayTitle)
+                        .font(.title3.bold())
+                    if connection.isImportedFromForkLift2 {
+                        Text("Migrated from ForkLift 2")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                Spacer()
+            }
+
+            // Configuration Form
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Name:")
+                        .font(.system(size: 11, weight: .medium))
+                        .frame(width: 80, alignment: .trailing)
+                    TextField("Friendly name", text: $connection.name)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                HStack {
+                    Text("Protocol:")
+                        .font(.system(size: 11, weight: .medium))
+                        .frame(width: 80, alignment: .trailing)
+                    Picker("", selection: $connection.connectionProtocol) {
+                        ForEach(ConnectionProtocol.allCases) { proto in
+                            Text(proto.rawValue).tag(proto)
+                        }
+                    }
+                    .labelsHidden()
+                    .onChange(of: connection.connectionProtocol) { proto in
+                        connection.port = proto.defaultPort
+                    }
+                }
+
+                HStack {
+                    Text("Server:")
+                        .font(.system(size: 11, weight: .medium))
+                        .frame(width: 80, alignment: .trailing)
+                    TextField("host or IP (e.g. synology.me)", text: $connection.host)
+                        .textFieldStyle(.roundedBorder)
+
+                    Text("Port:")
+                        .font(.system(size: 11, weight: .medium))
+
+                    // Pure numeric string binding - guarantees NO commas can ever be typed or displayed
+                    TextField("Port", text: Binding(
+                        get: { String(connection.port) },
+                        set: { newVal in
+                            let digits = newVal.filter { $0.isNumber }
+                            if let p = Int(digits) {
+                                connection.port = p
+                            } else if digits.isEmpty {
+                                connection.port = 0
+                            }
+                        }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 70)
+                }
+
+                HStack {
+                    Text("Username:")
+                        .font(.system(size: 11, weight: .medium))
+                        .frame(width: 80, alignment: .trailing)
+                    TextField("Username", text: $connection.username)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                HStack {
+                    Text("Path:")
+                        .font(.system(size: 11, weight: .medium))
+                        .frame(width: 80, alignment: .trailing)
+                    TextField("/path/to/folder", text: $connection.remotePath)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                if connection.connectionProtocol == .sftp {
+                    HStack {
+                        Text("Auth Type:")
+                            .font(.system(size: 11, weight: .medium))
+                            .frame(width: 80, alignment: .trailing)
+                        Picker("", selection: $connection.authType) {
+                            ForEach(AuthenticationType.allCases) { auth in
+                                Text(auth.rawValue).tag(auth)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    if connection.authType == .sshKey {
+                        HStack {
+                            Text("Private Key:")
+                                .font(.system(size: 11, weight: .medium))
+                                .frame(width: 80, alignment: .trailing)
+                            TextField("Key file path", text: $connection.keyFilePath)
+                                .textFieldStyle(.roundedBorder)
+                            Button("Browse...") {
+                                selectKeyFile()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("Password:")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .frame(width: 80, alignment: .trailing)
+                                SecureField("Server password (leave blank to prompt on connect)", text: $inputPassword)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+
+                            HStack {
+                                Spacer().frame(width: 84)
+                                Toggle("Save password in Keychain", isOn: $savePasswordToKeychain)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+
+                                if KeychainService.shared.loadPassword(for: connection) != nil {
+                                    Text("• Saved in Keychain")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.green)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
+
+            // Test Connection Box
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Button(action: onRunTest) {
+                        HStack(spacing: 4) {
+                            if isTesting {
+                                ProgressView().scaleEffect(0.6)
+                            } else {
+                                Image(systemName: "bolt.fill")
+                            }
+                            Text("Test Connection")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isTesting || connection.host.isEmpty)
+
+                    if connection.connectionProtocol == .sftp {
+                        Button(action: onOpenSSHTerminal) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "terminal")
+                                Text("Open SSH in Terminal")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(connection.host.isEmpty)
+                    }
+
+                    Spacer()
+                }
+
+                if let res = testResult {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: res.isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundColor(res.isSuccess ? .green : .red)
+                            .font(.system(size: 14))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(res.message)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(res.isSuccess ? .primary : .red)
+
+                            if let ip = res.resolvedIP {
+                                Text(verbatim: "IP: \(ip)  •  Latency: \(String(Int(res.latencyMs))) ms")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(res.isSuccess ? Color.green.opacity(0.1) : Color.red.opacity(0.1))
+                    .cornerRadius(6)
+                }
+            }
+
+            Spacer()
+
+            // Bottom Actions
+            HStack {
+                Button("Delete Connection", role: .destructive) {
+                    onDelete()
+                }
+
+                Spacer()
+
+                Button("Cancel") {
+                    onCancel()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                if isEditMode {
+                    Button("Connect") {
+                        onConnect()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(connection.host.isEmpty)
+
+                    Button("Save") {
+                        onSave()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                } else {
+                    Button("Save") {
+                        onSave()
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Connect") {
+                        onConnect()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(connection.host.isEmpty)
+                }
+            }
+        }
+        .padding(20)
+    }
+
+    private func selectKeyFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        let sshPath = ("~/.ssh" as NSString).expandingTildeInPath
+        if FileManager.default.fileExists(atPath: sshPath) {
+            panel.directoryURL = URL(fileURLWithPath: sshPath)
+        }
+        if panel.runModal() == .OK, let url = panel.url {
+            connection.keyFilePath = url.path
+        }
     }
 }
 

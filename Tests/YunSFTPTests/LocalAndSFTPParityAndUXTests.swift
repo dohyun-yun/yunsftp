@@ -567,4 +567,60 @@ final class LocalAndSFTPParityAndUXTests: XCTestCase {
         XCTAssertEqual(updated?.formattedPort, "2200")
         XCTAssertFalse(pane.isRemote, "Editing and saving a connection must never trigger connectRemote on the active pane")
     }
+
+    @MainActor
+    func testDeleteAllConnectionsDoesNotCrashAndSafeBindingHandling() {
+        // Save current connections to restore later
+        let previousConnections = ConnectionManager.shared.connections
+        defer {
+            ConnectionManager.shared.connections = previousConnections
+        }
+
+        // 1. Setup with 2 test connections
+        let c1 = RemoteConnection(name: "Server A", host: "1.1.1.1", port: 22)
+        let c2 = RemoteConnection(name: "Server B", host: "2.2.2.2", port: 2222)
+        ConnectionManager.shared.connections = [c1, c2]
+
+        XCTAssertEqual(ConnectionManager.shared.connections.count, 2)
+        guard var binding1 = ConnectionManager.shared.binding(for: c1.id) else {
+            XCTFail("Binding for c1 should exist")
+            return
+        }
+
+        // Test mutation through binding
+        binding1.wrappedValue.name = "Renamed A"
+        XCTAssertEqual(ConnectionManager.shared.connection(for: c1.id)?.name, "Renamed A")
+
+        // 2. Delete c1
+        ConnectionManager.shared.deleteConnection(id: c1.id)
+        XCTAssertEqual(ConnectionManager.shared.connections.count, 1)
+        XCTAssertNil(ConnectionManager.shared.connection(for: c1.id))
+
+        // Accessing stale binding for c1 must NEVER crash with index out of bounds
+        let fallbackConn = binding1.wrappedValue
+        XCTAssertEqual(fallbackConn.id, c1.id, "Stale binding must safely return fallback instead of trapping")
+
+        // 3. Delete c2 so connections is completely empty
+        guard let binding2 = ConnectionManager.shared.binding(for: c2.id) else {
+            XCTFail("Binding for c2 should exist")
+            return
+        }
+        ConnectionManager.shared.deleteConnection(id: c2.id)
+        XCTAssertTrue(ConnectionManager.shared.connections.isEmpty, "Connections list should now be completely empty")
+        XCTAssertNil(ConnectionManager.shared.connection(for: c2.id))
+        XCTAssertNil(ConnectionManager.shared.binding(for: c2.id))
+
+        // Stale binding2 access after all connections deleted must not crash
+        let fallback2 = binding2.wrappedValue
+        XCTAssertEqual(fallback2.id, c2.id)
+
+        // 4. Verify ConnectSheet renders with 0 connections without index out of range crash
+        let emptySheet = ConnectSheet(onConnect: { _, _ in })
+        _ = emptySheet.body
+        XCTAssertNotNil(emptySheet)
+
+        // 5. Verify deleting repeatedly on empty array does not throw
+        ConnectionManager.shared.deleteConnection(id: UUID())
+        XCTAssertTrue(ConnectionManager.shared.connections.isEmpty)
+    }
 }

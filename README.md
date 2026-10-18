@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Resources/forklift.icns" width="128" height="128" alt="yunsftp icon" />
+  <img src="Resources/app_icon.png" width="128" height="128" alt="yunsftp icon" style="border-radius: 26px;" />
 </p>
 
 <h1 align="center">yunsftp</h1>

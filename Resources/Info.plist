@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>yunsftp</string>
+    <key>CFBundleExecutable</key>
+    <string>yunsftp</string>
+    <key>CFBundleIconFile</key>
+    <string>forklift.icns</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.finsternis.yunsftp</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>yunsftp</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>yunsftp Native Silicon Edition</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>yunsftp requires access to Desktop to manage files.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>yunsftp requires access to Documents to manage files.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>yunsftp requires access to Downloads to manage files.</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>yunsftp requires access to removable volumes to manage external drives.</string>
+    <key>NSNetworkVolumesUsageDescription</key>
+    <string>yunsftp requires access to network volumes to manage network shares.</string>
+</dict>
+</plist>

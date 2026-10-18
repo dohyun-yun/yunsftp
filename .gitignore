@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# Swift Package Manager
+.build/
+Packages/
+Package.pins
+Package.resolved
+*.xcodeproj
+xcuserdata/
+DerivedData/
+.swiftpm/
+
+# Local Build Outputs
+build/
+main
+*.dSYM/
+
+# Temporary / Scratch
+*.swp
+*.swo
+*~
+scratch/
+.system_generated/

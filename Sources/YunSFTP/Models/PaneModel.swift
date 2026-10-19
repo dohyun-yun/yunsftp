@@ -422,6 +422,7 @@ public class PaneModel: ObservableObject, Identifiable {
         selectedItemURLs.removeAll()
         pinnedSelectionURLs.removeAll()
         selectionAnchorURL = nil
+        focusedItemURL = nil
     }
 
     /// Selects the contiguous range from `selectionAnchorURL` to `targetURL`, contracting any previously extended items outside the range.

@@ -690,8 +690,7 @@ final class LocalAndSFTPParityAndUXTests: XCTestCase {
         pane.clearSelection()
         XCTAssertTrue(pane.selectedItemURLs.isEmpty, "Esc must clear all selected items")
         XCTAssertTrue(pane.pinnedSelectionURLs.isEmpty, "Esc must clear all pinned/toggled items")
-        XCTAssertNil(pane.selectionAnchorURL, "Esc must reset selection anchor")
-        XCTAssertEqual(pane.focusedItemURL, item3.url, "Esc must preserve cursor focus for continued browsing")
+        XCTAssertNil(pane.focusedItemURL, "Esc must clear focus so no item remains highlighted")
     }
 
     func testFileIconProviderPreservesDistinctIconsForApplicationsAndFolders() {

@@ -577,6 +577,30 @@ final class LocalAndSFTPParityAndUXTests: XCTestCase {
         XCTAssertEqual(FileListView.clampedHorizontalOffset(currentX: 80.0, contentWidth: 400.0, viewportWidth: 500.0), 0.0)
     }
 
+    func testTargetVerticalOffsetPreventsJumpOnSelectionAndMaintainsLeftAnchor() {
+        // Header height = 24.0, row height = 22.0, viewportHeight = 300.0
+        // Visible items when currentOriginY = 0 are rows within [visibleTop = 24.0, visibleBottom = 300.0]
+        // Row 0: top 24, bottom 46 -> already visible -> nil (no jump!)
+        XCTAssertNil(FileListView.targetVerticalOffset(rowIndex: 0, currentOriginY: 0.0, viewportHeight: 300.0))
+
+        // Row 5: top 24 + 5*22 = 134, bottom 156 -> already visible -> nil (no jump!)
+        XCTAssertNil(FileListView.targetVerticalOffset(rowIndex: 5, currentOriginY: 0.0, viewportHeight: 300.0))
+
+        // Row 11: top 24 + 11*22 = 266, bottom 288 <= 300.0 -> already visible -> nil
+        XCTAssertNil(FileListView.targetVerticalOffset(rowIndex: 11, currentOriginY: 0.0, viewportHeight: 300.0))
+
+        // Row 15: top 24 + 15*22 = 354, bottom 376 > 300.0 -> below viewport
+        // Must scroll down minimal amount: 376 - 300 = 76.0 (NOT centered at (376 - 150))
+        let targetDown = FileListView.targetVerticalOffset(rowIndex: 15, currentOriginY: 0.0, viewportHeight: 300.0)
+        XCTAssertEqual(targetDown, 76.0)
+
+        // When scrolled to 76.0: visible range is [76 + 24 = 100, 76 + 300 = 376]
+        // If user navigates up to Row 2: top 24 + 2*22 = 68, bottom 90 < 100 -> above viewport
+        // Must scroll up minimal amount: rowTop - headerHeight = 68 - 24 = 44.0 (NOT centered!)
+        let targetUp = FileListView.targetVerticalOffset(rowIndex: 2, currentOriginY: 76.0, viewportHeight: 300.0)
+        XCTAssertEqual(targetUp, 44.0)
+    }
+
     @MainActor
     func testCmdKShortcutAndEditConnectionDoesNotConnect() {
         // 1. Verify Cmd + K triggers Connect Manager

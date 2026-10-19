@@ -261,7 +261,8 @@ public struct MainWindowView: View {
                     activePane.toggleSelectionAtFocus()
                 },
                 onEscape: {
-                    activePane.clearSelection()
+                    leftPane.clearSelection()
+                    rightPane.clearSelection()
                 },
                 onQuickLook: {
                     if let first = activePane.firstSelectedItem {
@@ -1269,7 +1270,9 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
 
                     // Escape key (keyCode 53) outside text fields -> Deselect all / cancel toggles
                     if KeyboardShortcutHelper.shouldTriggerEscape(keyCode: event.keyCode) {
-                        self.onEscape?()
+                        DispatchQueue.main.async {
+                            self.onEscape?()
+                        }
                         return nil
                     }
 

@@ -9,7 +9,9 @@
     <key>CFBundleExecutable</key>
     <string>yunsftp</string>
     <key>CFBundleIconFile</key>
-    <string>forklift.icns</string>
+    <string>yunsftp.icns</string>
+    <key>CFBundleIconName</key>
+    <string>yunsftp</string>
     <key>CFBundleIdentifier</key>
     <string>com.finsternis.yunsftp</string>
     <key>CFBundleInfoDictionaryVersion</key>

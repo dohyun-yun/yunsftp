@@ -76,6 +76,34 @@ public struct FileListView: View {
         return min(max(0.0, currentX), maxOffset)
     }
 
+    /// Computes the minimal vertical scroll adjustment to make `rowIndex` visible within `[visibleTop, visibleBottom]`.
+    /// Returns `nil` if the row is already fully visible, preventing jarring jumps on mouse selection.
+    public static func targetVerticalOffset(
+        rowIndex: Int,
+        headerHeight: Double = 24.0,
+        rowHeight: Double = 22.0,
+        currentOriginY: Double,
+        viewportHeight: Double
+    ) -> Double? {
+        guard viewportHeight > 0, rowIndex >= 0 else { return nil }
+        let rowTop = headerHeight + Double(rowIndex) * rowHeight
+        let rowBottom = rowTop + rowHeight
+
+        let visibleTop = currentOriginY + headerHeight
+        let visibleBottom = currentOriginY + viewportHeight
+
+        if rowTop < visibleTop {
+            // Above visible top -> scroll up just enough to reveal row below header
+            return max(0.0, rowTop - headerHeight)
+        } else if rowBottom > visibleBottom {
+            // Below visible bottom -> scroll down just enough to reveal row at bottom
+            return max(0.0, rowBottom - viewportHeight)
+        } else {
+            // Fully visible within viewport -> do NOT jump or scroll
+            return nil
+        }
+    }
+
     @ViewBuilder
     private func tableHeaderBar(tableWidth: Double, nameColumnWidth: Double) -> some View {
         HStack(spacing: 0) {
@@ -187,71 +215,66 @@ public struct FileListView: View {
                     .frame(width: tableWidth, height: max(100, geo.size.height), alignment: .topLeading)
                 }
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                        LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                            Section(header: tableHeaderBar(tableWidth: tableWidth, nameColumnWidth: effectiveNameW)) {
-                                ForEach(pane.displayedItems) { item in
-                                    FileRowView(
-                                        item: item,
-                                        isSelected: pane.selectedItemURLs.contains(item.url),
-                                        isFocused: pane.focusedItemURL == item.url,
-                                        nameWidth: effectiveNameW,
-                                        sizeWidth: sizeWidth,
-                                        dateWidth: dateWidth,
-                                        kindWidth: kindWidth,
-                                        permsWidth: permsWidth,
-                                        onActivate: onActivate,
-                                        onSelect: { isShift, isCmd in
-                                            onActivate()
-                                            handleSelection(item: item, isShift: isShift, isCmd: isCmd)
-                                        },
-                                        onDoubleClick: {
-                                            onActivate()
-                                            if item.isDirectory {
-                                                pane.navigateTo(item.url)
-                                            } else {
-                                                onOpenItem(item)
-                                            }
-                                        },
-                                        onDragStart: {
-                                            let itemsToDrag = pane.selectedItemURLs.contains(item.url) ? pane.selectedItems : [item]
-                                            DragDropManager.shared.startDrag(items: itemsToDrag, from: pane)
-                                        },
-                                        onDropOntoFolder: { providers in
-                                            onActivate()
-                                            DragDropManager.shared.handleDrop(onto: pane, targetSubfolder: item, externalProviders: providers) {
-                                                pane.reload()
-                                            }
-                                        },
-                                        onDropOntoPane: { providers in
-                                            onActivate()
-                                            DragDropManager.shared.handleDrop(onto: pane, targetSubfolder: nil, externalProviders: providers) {
-                                                pane.reload()
-                                            }
+                ScrollView([.horizontal, .vertical], showsIndicators: true) {
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        Section(header: tableHeaderBar(tableWidth: tableWidth, nameColumnWidth: effectiveNameW)) {
+                            ForEach(pane.displayedItems) { item in
+                                FileRowView(
+                                    item: item,
+                                    isSelected: pane.selectedItemURLs.contains(item.url),
+                                    isFocused: pane.focusedItemURL == item.url,
+                                    nameWidth: effectiveNameW,
+                                    sizeWidth: sizeWidth,
+                                    dateWidth: dateWidth,
+                                    kindWidth: kindWidth,
+                                    permsWidth: permsWidth,
+                                    onActivate: onActivate,
+                                    onSelect: { isShift, isCmd in
+                                        onActivate()
+                                        handleSelection(item: item, isShift: isShift, isCmd: isCmd)
+                                    },
+                                    onDoubleClick: {
+                                        onActivate()
+                                        if item.isDirectory {
+                                            pane.navigateTo(item.url)
+                                        } else {
+                                            onOpenItem(item)
                                         }
-                                    )
-                                    .frame(width: tableWidth, alignment: .leading)
-                                    .contextMenu {
-                                        contextMenuFor(item: item)
+                                    },
+                                    onDragStart: {
+                                        let itemsToDrag = pane.selectedItemURLs.contains(item.url) ? pane.selectedItems : [item]
+                                        DragDropManager.shared.startDrag(items: itemsToDrag, from: pane)
+                                    },
+                                    onDropOntoFolder: { providers in
+                                        onActivate()
+                                        DragDropManager.shared.handleDrop(onto: pane, targetSubfolder: item, externalProviders: providers) {
+                                            pane.reload()
+                                        }
+                                    },
+                                    onDropOntoPane: { providers in
+                                        onActivate()
+                                        DragDropManager.shared.handleDrop(onto: pane, targetSubfolder: nil, externalProviders: providers) {
+                                            pane.reload()
+                                        }
                                     }
-                                    .id(item.url)
+                                )
+                                .frame(width: tableWidth, alignment: .leading)
+                                .contextMenu {
+                                    contextMenuFor(item: item)
                                 }
+                                .id(item.url)
                             }
                         }
-                        .frame(width: tableWidth, alignment: .topLeading)
-                        .background(
-                            HorizontalScrollBounceNormalizer(
-                                contentWidth: tableWidth,
-                                viewportWidth: geo.size.width
-                            )
+                    }
+                    .frame(width: tableWidth, alignment: .topLeading)
+                    .background(
+                        HorizontalScrollBounceNormalizer(
+                            contentWidth: tableWidth,
+                            viewportWidth: geo.size.width,
+                            targetURL: pane.focusedItemURL,
+                            items: pane.displayedItems
                         )
-                    }
-                    .onChange(of: pane.focusedItemURL) { targetURL in
-                        if let url = targetURL {
-                            proxy.scrollTo(url, anchor: .center)
-                        }
-                    }
+                    )
                 }
             }
         }
@@ -611,10 +634,12 @@ public struct FileRowView: View {
 }
 
 /// Ensures horizontal scrolling in NSScrollView snaps back immediately when overscrolled past the left or right edge
-/// so blank space never remains stuck at the end of a horizontal scroll.
+/// and manages minimal vertical visibility scrolling on focus/selection while keeping horizontal scroll strictly left-anchored (at x = 0).
 public struct HorizontalScrollBounceNormalizer: NSViewRepresentable {
     let contentWidth: Double
     let viewportWidth: Double
+    var targetURL: URL? = nil
+    var items: [FileItem] = []
 
     public func makeNSView(context: Context) -> ScrollNormalizerNSView {
         let view = ScrollNormalizerNSView()
@@ -627,6 +652,11 @@ public struct HorizontalScrollBounceNormalizer: NSViewRepresentable {
         nsView.contentWidth = contentWidth
         nsView.viewportWidth = viewportWidth
         nsView.configureScrollViewIfNeeded()
+        if let target = targetURL {
+            nsView.scrollToItemIfNeeded(url: target, items: items)
+        } else {
+            nsView.lastScrolledURL = nil
+        }
     }
 
     public final class ScrollNormalizerNSView: NSView {
@@ -635,6 +665,7 @@ public struct HorizontalScrollBounceNormalizer: NSViewRepresentable {
         private weak var attachedScrollView: NSScrollView?
         private var scrollMonitor: Any?
         private var isUserTouchingTrackpad: Bool = false
+        var lastScrolledURL: URL? = nil
 
         public override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -656,10 +687,46 @@ public struct HorizontalScrollBounceNormalizer: NSViewRepresentable {
                 attachedScrollView = sv
                 sv.horizontalScrollElasticity = .allowed
                 sv.verticalScrollElasticity = .allowed
+                let clipView = sv.contentView
+                if clipView.bounds.origin.x != 0 {
+                    clipView.setBoundsOrigin(NSPoint(x: 0, y: clipView.bounds.origin.y))
+                    sv.reflectScrolledClipView(clipView)
+                }
             }
             if !isUserTouchingTrackpad {
                 snapBackIfOutOfBounds(animated: false)
             }
+        }
+
+        func scrollToItemIfNeeded(url: URL, items: [FileItem]) {
+            guard let sv = attachedScrollView else { return }
+            guard let index = items.firstIndex(where: { $0.url == url }) else { return }
+
+            let clipView = sv.contentView
+            let clipBounds = clipView.bounds
+            guard clipBounds.height > 0 else { return }
+
+            let targetOffset = FileListView.targetVerticalOffset(
+                rowIndex: index,
+                headerHeight: 24.0,
+                rowHeight: 22.0,
+                currentOriginY: Double(clipBounds.origin.y),
+                viewportHeight: Double(clipBounds.height)
+            )
+
+            let currentX = Double(clipBounds.origin.x)
+            let targetX = 0.0
+
+            if let targetY = targetOffset {
+                let targetPoint = NSPoint(x: CGFloat(targetX), y: CGFloat(targetY))
+                clipView.setBoundsOrigin(targetPoint)
+                sv.reflectScrolledClipView(clipView)
+            } else if !isUserTouchingTrackpad && abs(currentX - targetX) > 0.5 {
+                let targetPoint = NSPoint(x: CGFloat(targetX), y: clipBounds.origin.y)
+                clipView.setBoundsOrigin(targetPoint)
+                sv.reflectScrolledClipView(clipView)
+            }
+            lastScrolledURL = url
         }
 
         private func handleScrollEvent(_ event: NSEvent) {

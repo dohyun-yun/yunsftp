@@ -31,6 +31,44 @@ final class LocalAndSFTPParityAndUXTests: XCTestCase {
         XCTAssertGreaterThan(tableWidthExpanded, viewportWidth, "Table width must expand beyond viewport so horizontal ScrollView scrolls all columns in lockstep")
     }
 
+    func testEffectiveNameColumnWidthExpandsIntoAvailableSpace() {
+        // Other columns total = 80 + 135 + 95 + 65 + 25 = 400
+        // When pane is 800 wide, available for Name is 800 - 400 = 400.
+        // Even if default nameWidth is 220, effectiveNameColumnWidth expands to 400!
+        let wideNameWidth = FileListView.effectiveNameColumnWidth(
+            paneWidth: 800,
+            nameWidth: 220,
+            sizeWidth: 80,
+            dateWidth: 135,
+            kindWidth: 95,
+            permsWidth: 65
+        )
+        XCTAssertEqual(wideNameWidth, 400, "Name column must expand to 400 to fill available pane width")
+
+        // When pane is narrow (e.g. 500 wide), available is 500 - 400 = 100.
+        // effectiveNameColumnWidth respects the user's nameWidth (220) and does not collapse below it
+        let narrowNameWidth = FileListView.effectiveNameColumnWidth(
+            paneWidth: 500,
+            nameWidth: 220,
+            sizeWidth: 80,
+            dateWidth: 135,
+            kindWidth: 95,
+            permsWidth: 65
+        )
+        XCTAssertEqual(narrowNameWidth, 220, "Name column must retain minimum nameWidth when pane is narrow")
+
+        // When user manually drags nameWidth larger (e.g. 600) on an 800-wide pane:
+        let manualExpandedNameWidth = FileListView.effectiveNameColumnWidth(
+            paneWidth: 800,
+            nameWidth: 600,
+            sizeWidth: 80,
+            dateWidth: 135,
+            kindWidth: 95,
+            permsWidth: 65
+        )
+        XCTAssertEqual(manualExpandedNameWidth, 600, "Manually widened nameWidth beyond available space must be respected")
+    }
+
     // MARK: - 2. Keyboard Shortcut Delete (Ctrl+Backspace, Cmd+Backspace, Forward Delete) Tests
 
     func testDeleteKeyboardShortcutsIncludeCtrlBackspaceCmdBackspaceAndForwardDelete() {
@@ -622,5 +660,60 @@ final class LocalAndSFTPParityAndUXTests: XCTestCase {
         // 5. Verify deleting repeatedly on empty array does not throw
         ConnectionManager.shared.deleteConnection(id: UUID())
         XCTAssertTrue(ConnectionManager.shared.connections.isEmpty)
+    }
+
+    @MainActor
+    func testEscapeKeyCancelsAndClearsAllToggledSelections() {
+        let pane = PaneModel(autoLoad: false)
+        let item1 = FileItem(virtualURL: URL(fileURLWithPath: "/tmp/file1.txt"), name: "file1.txt", isDirectory: false, size: 10, modificationDate: Date(), permissions: "rw-r--r--")
+        let item2 = FileItem(virtualURL: URL(fileURLWithPath: "/tmp/file2.txt"), name: "file2.txt", isDirectory: false, size: 20, modificationDate: Date(), permissions: "rw-r--r--")
+        let item3 = FileItem(virtualURL: URL(fileURLWithPath: "/tmp/file3.txt"), name: "file3.txt", isDirectory: false, size: 30, modificationDate: Date(), permissions: "rw-r--r--")
+        pane.items = [item1, item2, item3]
+
+        // 1. Verify Space toggle on item1 and item3
+        pane.focusedItemURL = item1.url
+        pane.toggleSelectionAtFocus()
+        XCTAssertTrue(pane.selectedItemURLs.contains(item1.url))
+        XCTAssertTrue(pane.pinnedSelectionURLs.contains(item1.url))
+
+        pane.focusedItemURL = item3.url
+        pane.toggleSelectionAtFocus()
+        XCTAssertEqual(pane.selectedItemURLs.count, 2)
+        XCTAssertEqual(pane.pinnedSelectionURLs.count, 2)
+
+        // 2. Verify Escape key triggers shouldTriggerEscape
+        XCTAssertTrue(KeyboardShortcutHelper.shouldTriggerEscape(keyCode: 53))
+        XCTAssertFalse(KeyboardShortcutHelper.shouldTriggerEscape(keyCode: 49))
+        XCTAssertFalse(KeyboardShortcutHelper.shouldTriggerEscape(keyCode: 36))
+
+        // 3. Trigger clearSelection (simulating Esc action)
+        pane.clearSelection()
+        XCTAssertTrue(pane.selectedItemURLs.isEmpty, "Esc must clear all selected items")
+        XCTAssertTrue(pane.pinnedSelectionURLs.isEmpty, "Esc must clear all pinned/toggled items")
+        XCTAssertNil(pane.selectionAnchorURL, "Esc must reset selection anchor")
+        XCTAssertEqual(pane.focusedItemURL, item3.url, "Esc must preserve cursor focus for continued browsing")
+    }
+
+    func testFileIconProviderPreservesDistinctIconsForApplicationsAndFolders() {
+        let safariURL = URL(fileURLWithPath: "/Applications/Safari.app")
+        let calcURL = URL(fileURLWithPath: "/System/Applications/Calculator.app")
+
+        let safariItem = FileItem(url: safariURL)
+        let calcItem = FileItem(url: calcURL)
+
+        let safariIcon = FileIconProvider.shared.icon(for: safariItem)
+        let calcIcon = FileIconProvider.shared.icon(for: calcItem)
+
+        XCTAssertNotNil(safariIcon)
+        XCTAssertNotNil(calcIcon)
+
+        // If both apps exist on macOS, their icon representations must be distinct and not identical cached instances
+        if FileManager.default.fileExists(atPath: safariURL.path) && FileManager.default.fileExists(atPath: calcURL.path) {
+            XCTAssertNotEqual(
+                safariIcon.tiffRepresentation,
+                calcIcon.tiffRepresentation,
+                "Different applications must have distinct icons, never sharing a single cached 'dir:app' icon"
+            )
+        }
     }
 }

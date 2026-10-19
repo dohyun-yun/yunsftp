@@ -417,6 +417,13 @@ public class PaneModel: ObservableObject, Identifiable {
         selectionAnchorURL = itemURL
     }
 
+    /// Clears all selected and pinned/toggled items in this pane (triggered by Esc).
+    public func clearSelection() {
+        selectedItemURLs.removeAll()
+        pinnedSelectionURLs.removeAll()
+        selectionAnchorURL = nil
+    }
+
     /// Selects the contiguous range from `selectionAnchorURL` to `targetURL`, contracting any previously extended items outside the range.
     public func selectRange(to targetURL: URL) {
         let list = displayedItems

@@ -657,27 +657,47 @@ public actor SFTPService {
         process.standardError = stderrPipe
         process.standardInput = stdinPipe
 
+        final class ProcessState: @unchecked Sendable {
+            var resumed = false
+            let lock = NSLock()
+        }
+        let procState = ProcessState()
+
+        let stdoutTask = Task.detached {
+            stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        }
+        let stderrTask = Task.detached {
+            stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        }
+
         do {
-            try process.run()
-
-            if let input = inputData {
-                stdinPipe.fileHandleForWriting.write(input)
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                process.terminationHandler = { _ in
+                    procState.lock.lock()
+                    defer { procState.lock.unlock() }
+                    if !procState.resumed {
+                        procState.resumed = true
+                        continuation.resume()
+                    }
+                }
+                do {
+                    try process.run()
+                    if let input = inputData {
+                        stdinPipe.fileHandleForWriting.write(input)
+                    }
+                    try? stdinPipe.fileHandleForWriting.close()
+                } catch {
+                    procState.lock.lock()
+                    defer { procState.lock.unlock() }
+                    if !procState.resumed {
+                        procState.resumed = true
+                        continuation.resume(throwing: error)
+                    }
+                }
             }
-            try? stdinPipe.fileHandleForWriting.close()
 
-            // Asynchronously drain stdout and stderr concurrently to prevent buffer deadlocks
-            async let stdoutBytes = Task.detached {
-                stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-            }.value
-
-            async let stderrBytes = Task.detached {
-                stderrPipe.fileHandleForReading.readDataToEndOfFile()
-            }.value
-
-            let outData = await stdoutBytes
-            let errData = await stderrBytes
-
-            process.waitUntilExit()
+            let outData = await stdoutTask.value
+            let errData = await stderrTask.value
 
             if let tmp = tempAskPassURL {
                 try? FileManager.default.removeItem(at: tmp)

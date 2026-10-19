@@ -260,6 +260,9 @@ public struct MainWindowView: View {
                 onSpace: {
                     activePane.toggleSelectionAtFocus()
                 },
+                onEscape: {
+                    activePane.clearSelection()
+                },
                 onQuickLook: {
                     if let first = activePane.firstSelectedItem {
                         previewItem = first
@@ -1099,6 +1102,7 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
     var isEnabled: Bool = true
     let onTab: () -> Void
     let onSpace: () -> Void
+    var onEscape: (() -> Void)? = nil
     var onQuickLook: (() -> Void)? = nil
     var onConnect: (() -> Void)? = nil
     let onCopy: () -> Void
@@ -1147,6 +1151,11 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
         return keyCode == 49 && isPlain
     }
 
+    /// Testable helper verifying whether a key event should cancel/clear selection (`Escape` - keyCode 53).
+    public static func shouldTriggerEscape(keyCode: UInt16) -> Bool {
+        return keyCode == 53
+    }
+
     public func makeNSView(context: Context) -> KeyView {
         let view = KeyView()
         updateKeyView(view)
@@ -1161,6 +1170,7 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
         view.isEnabled = isEnabled
         view.onTab = onTab
         view.onSpace = onSpace
+        view.onEscape = onEscape
         view.onQuickLook = onQuickLook
         view.onConnect = onConnect
         view.onCopy = onCopy
@@ -1193,6 +1203,7 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
         var isEnabled: Bool = true
         var onTab: (() -> Void)?
         var onSpace: (() -> Void)?
+        var onEscape: (() -> Void)?
         var onQuickLook: (() -> Void)?
         var onConnect: (() -> Void)?
         var onCopy: (() -> Void)?
@@ -1254,6 +1265,12 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
                             return nil
                         }
                         return event
+                    }
+
+                    // Escape key (keyCode 53) outside text fields -> Deselect all / cancel toggles
+                    if KeyboardShortcutHelper.shouldTriggerEscape(keyCode: event.keyCode) {
+                        self.onEscape?()
+                        return nil
                     }
 
                     let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)

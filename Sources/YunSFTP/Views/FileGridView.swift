@@ -27,20 +27,10 @@ public struct FileGridView: View {
                     let isSelected = pane.selectedItemURLs.contains(item.url)
                     let isFocused = pane.focusedItemURL == item.url
                     VStack(spacing: 4) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(nsImage: FileIconProvider.shared.icon(for: item))
-                                .resizable()
-                                .frame(width: 48, height: 48)
-                                .shadow(radius: 1)
-
-                            if isSelected {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(.accentColor)
-                                    .background(Circle().fill(Color.white))
-                                    .offset(x: 4, y: -4)
-                            }
-                        }
+                        Image(nsImage: FileIconProvider.shared.icon(for: item))
+                            .resizable()
+                            .frame(width: 48, height: 48)
+                            .shadow(radius: 1)
 
                         Text(item.name)
                             .font(.system(size: 11))

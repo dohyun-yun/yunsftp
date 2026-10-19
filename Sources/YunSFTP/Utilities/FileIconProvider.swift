@@ -12,7 +12,26 @@ public final class FileIconProvider: @unchecked Sendable {
     }
 
     public func icon(for item: FileItem) -> NSImage {
-        let key = (item.isDirectory ? "dir:\(item.fileExtension)" : "file:\(item.fileExtension)") as NSString
+        let ext = item.fileExtension.lowercased()
+        let isAppOrBundle = (ext == "app" || ext == "pkg" || ext == "dmg" || ext == "prefpane")
+        let key: NSString
+
+        if FileManager.default.fileExists(atPath: item.url.path) {
+            // Local files: applications, bundles, and directories must be keyed by path to preserve their distinct icons
+            if isAppOrBundle || item.isDirectory {
+                key = "local_path:\(item.url.path)" as NSString
+            } else {
+                key = "local_ext:\(ext)" as NSString
+            }
+        } else {
+            // Remote SFTP items (not present locally on Mac)
+            if item.isDirectory {
+                key = (isAppOrBundle ? "remote_bundle:\(item.url.path)" : "remote_dir") as NSString
+            } else {
+                key = "remote_ext:\(ext)" as NSString
+            }
+        }
+
         if let cached = cache.object(forKey: key) {
             return cached
         }

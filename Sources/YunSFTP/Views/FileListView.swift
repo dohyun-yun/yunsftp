@@ -50,6 +50,21 @@ public struct FileListView: View {
         return max(paneWidth, cols)
     }
 
+    /// Computes the effective width for the Name column so that when the pane width is sufficient,
+    /// the filename expands into the available space rather than being truncated prematurely.
+    public static func effectiveNameColumnWidth(
+        paneWidth: Double,
+        nameWidth: Double,
+        sizeWidth: Double,
+        dateWidth: Double,
+        kindWidth: Double,
+        permsWidth: Double
+    ) -> Double {
+        let otherCols = sizeWidth + dateWidth + kindWidth + permsWidth + 25.0
+        let available = max(100.0, paneWidth - otherCols)
+        return max(nameWidth, available)
+    }
+
     /// Computes the valid clamped horizontal scroll offset `[0, max(0, contentWidth - viewportWidth)]`
     /// so that overscrolled blank space at the left or right edge always snaps back cleanly.
     public static func clampedHorizontalOffset(
@@ -62,10 +77,18 @@ public struct FileListView: View {
     }
 
     @ViewBuilder
-    private func tableHeaderBar(tableWidth: Double) -> some View {
+    private func tableHeaderBar(tableWidth: Double, nameColumnWidth: Double) -> some View {
         HStack(spacing: 0) {
-            headerCell("Name", field: .name, alignment: .leading, width: nameWidth)
-            ColumnResizeDivider(width: $nameWidth, minWidth: 100, maxWidth: 1000, defaultWidth: 220)
+            headerCell("Name", field: .name, alignment: .leading, width: nameColumnWidth)
+            ColumnResizeDivider(
+                width: Binding<Double>(
+                    get: { nameColumnWidth },
+                    set: { nameWidth = $0 }
+                ),
+                minWidth: 100,
+                maxWidth: 1000,
+                defaultWidth: 220
+            )
 
             headerCell("Size", field: .size, alignment: .trailing, width: sizeWidth)
             ColumnResizeDivider(width: $sizeWidth, minWidth: 50, maxWidth: 300, defaultWidth: 80)
@@ -88,8 +111,16 @@ public struct FileListView: View {
 
     public var body: some View {
         GeometryReader { geo in
-            let colsWidth = Self.totalColumnsWidth(
+            let effectiveNameW = Self.effectiveNameColumnWidth(
+                paneWidth: geo.size.width,
                 nameWidth: nameWidth,
+                sizeWidth: sizeWidth,
+                dateWidth: dateWidth,
+                kindWidth: kindWidth,
+                permsWidth: permsWidth
+            )
+            let colsWidth = Self.totalColumnsWidth(
+                nameWidth: effectiveNameW,
                 sizeWidth: sizeWidth,
                 dateWidth: dateWidth,
                 kindWidth: kindWidth,
@@ -100,7 +131,7 @@ public struct FileListView: View {
             if pane.displayedItems.isEmpty {
                 ScrollView(.horizontal, showsIndicators: colsWidth > geo.size.width) {
                     VStack(spacing: 0) {
-                        tableHeaderBar(tableWidth: tableWidth)
+                        tableHeaderBar(tableWidth: tableWidth, nameColumnWidth: effectiveNameW)
 
                         VStack(spacing: 12) {
                             Spacer()
@@ -159,13 +190,13 @@ public struct FileListView: View {
                 ScrollViewReader { proxy in
                     ScrollView([.horizontal, .vertical], showsIndicators: true) {
                         LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                            Section(header: tableHeaderBar(tableWidth: tableWidth)) {
+                            Section(header: tableHeaderBar(tableWidth: tableWidth, nameColumnWidth: effectiveNameW)) {
                                 ForEach(pane.displayedItems) { item in
                                     FileRowView(
                                         item: item,
                                         isSelected: pane.selectedItemURLs.contains(item.url),
                                         isFocused: pane.focusedItemURL == item.url,
-                                        nameWidth: nameWidth,
+                                        nameWidth: effectiveNameW,
                                         sizeWidth: sizeWidth,
                                         dateWidth: dateWidth,
                                         kindWidth: kindWidth,
@@ -446,12 +477,6 @@ public struct FileRowView: View {
         HStack(spacing: 0) {
             // Icon & Name
             HStack(spacing: 6) {
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white)
-                }
-
                 Image(nsImage: FileIconProvider.shared.icon(for: item))
                     .resizable()
                     .frame(width: 16, height: 16)

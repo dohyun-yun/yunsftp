@@ -13,7 +13,7 @@
   <a href="#-features"><img src="https://img.shields.io/badge/Platform-macOS%2014.0%2B-blue?logo=apple" alt="Platform"></a>
   <a href="#-features"><img src="https://img.shields.io/badge/Architecture-Apple%20Silicon%20(arm64)-orange" alt="Apple Silicon"></a>
   <a href="#-features"><img src="https://img.shields.io/badge/Swift-6.0-F05138?logo=swift" alt="Swift 6"></a>
-  <a href="#-automated-testing"><img src="https://img.shields.io/badge/Tests-42%20Passed%20(100%25)-brightgreen" alt="Tests"></a>
+  <a href="#-automated-testing"><img src="https://img.shields.io/badge/Tests-43%20Passed%20(100%25)-brightgreen" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/No%20Ads-100%25%20Free-success" alt="100% Free">
 </p>
@@ -114,7 +114,9 @@ Most file transfer apps today are bloated with paid subscription models, intrusi
 ## 🚀 Installation
 
 ### Option 1: Download Pre-built Release (Recommended)
-Download the latest `yunsftp.app` or `.zip` from the [Releases](https://github.com/dohyun-yun/yunsftp/releases) page, unzip, and move it to your `/Applications` folder.
+Download the latest `.dmg` installer or `.zip` archive from the [Releases](https://github.com/dohyun-yun/yunsftp/releases) page.
+- **DMG**: Double-click `yunsftp-v1.0.0-macos-arm64.dmg` and drag `yunsftp.app` to your `/Applications` folder.
+- **ZIP**: Unzip `yunsftp-v1.0.0-macos-arm64.zip` and move `yunsftp.app` to `/Applications`.
 
 ### Option 2: Build from Source
 Ensure Swift 6 and Xcode command-line tools are installed:
@@ -143,7 +145,7 @@ open /Applications/yunsftp.app
 
 ## 🧪 Automated Testing
 
-`yunsftp` includes 42 automated unit and integration tests verifying SFTP parity, Unicode normalization, and UI interactions:
+`yunsftp` includes 43 automated unit and integration tests verifying SFTP parity, Unicode normalization, and UI interactions:
 
 ```bash
 swift test
@@ -151,7 +153,7 @@ swift test
 
 ```text
 Test Suite 'All tests' passed at 2026-10-18.
-Executed 42 tests, with 0 failures (0 unexpected) in 0.846 seconds.
+Executed 43 tests, with 0 failures (0 unexpected) in 0.846 seconds.
 ```
 
 - **Parity Verification**: File copy, move, delete, directory creation, and in-place rename across local and SFTP environments.

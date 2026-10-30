@@ -18,7 +18,7 @@ Status board for the hardening pass. One commit per item. Legend: `[ ]` todo, `[
 - [x] 9. Remove ForkLift leftovers: duplicate icns/entitlements, legacy keychain/UserDefaults namespaces, queue labels, install.sh legacy removal.
 - [x] 10. Unify user-facing strings to English.
 - [x] 11. README/User Guide accuracy: platform/Swift versions, test badge, Gatekeeper first-run note, SSH agent note, neutral comparison tone; version read from Info.plist in release script.
-- [ ] 12. CI (build + test), SECURITY.md, CONTRIBUTING.md, CHANGELOG.md, issue templates, repo topics.
+- [x] 12. CI (build + test), SECURITY.md, CONTRIBUTING.md, CHANGELOG.md, issue templates, repo topics.
 
 ## P2 Features / UX
 

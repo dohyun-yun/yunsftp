@@ -118,8 +118,12 @@ extension PaneNavigationModeTests {
         await waitUntil { !pane.isLoading }
         XCTAssertEqual(pane.currentURL.standardizedFileURL, one.standardizedFileURL)
         XCTAssertFalse(pane.canGoBack)
-        pane.goForward()
+        pane.goForward()                                // steps over "two" again, entry kept
         await waitUntil { !pane.isLoading }
         XCTAssertEqual(pane.currentURL.standardizedFileURL, three.standardizedFileURL)
+        try FileManager.default.createDirectory(at: two, withIntermediateDirectories: true)
+        pane.goBack()                                   // "two" is back: the kept entry is reachable again
+        await waitUntil { !pane.isLoading }
+        XCTAssertEqual(pane.currentURL.standardizedFileURL, two.standardizedFileURL)
     }
 }

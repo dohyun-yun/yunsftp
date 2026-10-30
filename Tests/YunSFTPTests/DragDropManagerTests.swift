@@ -54,22 +54,25 @@ final class DragDropManagerTests: XCTestCase {
 
 
 extension DragDropManagerTests {
-    func testInternalDropIsRecognisedByMatchingURLs() {
-        let local = FileItem(url: URL(fileURLWithPath: "/tmp/a.txt"))
-        let remote = FileItem(virtualURL: URL(string: "sftp://h:22/r.txt")!, name: "r.txt", isDirectory: false, size: 1, modificationDate: Date(), permissions: "")
-        XCTAssertTrue(DragDropManager.isInternalDrop(dragged: [local], dropped: [URL(fileURLWithPath: "/tmp/a.txt")], hadProviders: true))
-        XCTAssertTrue(DragDropManager.isInternalDrop(dragged: [remote], dropped: [URL(string: "sftp://h:22/r.txt")!], hadProviders: true))
-        XCTAssertFalse(DragDropManager.isInternalDrop(dragged: [remote], dropped: [URL(fileURLWithPath: "/Users/me/photo.jpg")], hadProviders: true), "stale state from a drag that ended in Finder")
-        XCTAssertFalse(DragDropManager.isInternalDrop(dragged: [], dropped: [URL(fileURLWithPath: "/x")], hadProviders: true))
+    func testOnlyOurOwnProvidersCarryTheSessionMarker() {
+        let ours = DragDropManager.shared.makeProvider(for: URL(fileURLWithPath: "/tmp/a.txt"))
+        let finder = NSItemProvider(object: URL(fileURLWithPath: "/tmp/a.txt") as NSURL)
+        XCTAssertTrue(DragDropManager.isInternalDrop(providers: [ours]))
+        XCTAssertFalse(DragDropManager.isInternalDrop(providers: [finder]), "same URL from Finder is external")
+        XCTAssertFalse(DragDropManager.isInternalDrop(providers: []))
+        XCTAssertTrue(ours.canLoadObject(ofClass: NSURL.self), "the file URL is still there for Finder")
+    }
 
-        // Only the re-dropped subset of a stale multi-item drag is used, never the whole set.
-        let b = FileItem(url: URL(fileURLWithPath: "/tmp/b.txt"))
-        let subset = DragDropManager.internalItems(dragged: [local, b], dropped: [URL(fileURLWithPath: "/tmp/b.txt")], hadProviders: true)
-        XCTAssertEqual(subset.map(\.name), ["b.txt"])
-
-        // Trailing slashes and decomposed Unicode do not break the match.
-        let dir = FileItem(virtualURL: URL(fileURLWithPath: "/tmp/한글/", isDirectory: true), name: "한글", isDirectory: true, size: 0, modificationDate: Date(), permissions: "")
-        let nfd = URL(fileURLWithPath: "/tmp/" + "한글".decomposedStringWithCanonicalMapping)
-        XCTAssertTrue(DragDropManager.isInternalDrop(dragged: [dir], dropped: [nfd], hadProviders: true))
+    @MainActor
+    func testInternalDropTransfersTheWholeSelectionAndStaleStateIsDropped() async throws {
+        // handleDrop with the marker must hand over all dragged items; without it the cache is cleared.
+        let manager = DragDropManager()
+        let pane = PaneModel(initialURL: FileManager.default.temporaryDirectory, autoLoad: false)
+        let items = ["a", "b", "c"].map { FileItem(url: URL(fileURLWithPath: "/tmp/\($0).txt")) }
+        manager.startDrag(items: items, from: pane)
+        XCTAssertEqual(manager.draggedItems.count, 3)
+        // A Finder drop (no marker) after an abandoned drag: the stale items must not be replayed.
+        manager.handleDrop(onto: pane, externalProviders: [NSItemProvider(object: URL(fileURLWithPath: "/tmp/other.txt") as NSURL)]) {}
+        XCTAssertTrue(manager.draggedItems.isEmpty)
     }
 }

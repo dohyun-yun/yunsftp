@@ -56,7 +56,7 @@ public struct FileGridView: View {
                             let pwd = pane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
                             return RemoteDragProvider.make(item: item, connection: conn, password: pwd)
                         }
-                        return NSItemProvider(object: item.url as NSURL)
+                        return DragDropManager.shared.makeProvider(for: item.url)
                     }
                     .onTapGesture(count: 2) {
                         onActivate()

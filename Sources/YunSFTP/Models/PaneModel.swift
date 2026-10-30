@@ -182,7 +182,8 @@ public class PaneModel: ObservableObject, Identifiable {
         // The destination's scheme decides the mode. A sidebar favourite or a history entry is a
         // file URL even while the pane shows a server, and must switch the pane back to local.
         if url.scheme == "sftp" {
-            // History entries carry the exact connection; other callers are matched by host/port.
+            // History entries carry the exact connection; other callers (folder double-clicks,
+            // breadcrumbs) always target the session they were created in, so host/port is enough.
             let matches = { (c: RemoteConnection?) -> Bool in
                 guard let c else { return false }
                 if let connectionID { return c.id == connectionID }
@@ -231,8 +232,9 @@ public class PaneModel: ObservableObject, Identifiable {
     public func goBack() { step(-1) }
     public func goForward() { step(+1) }
 
-    /// Walks the history in one direction until an entry can be shown; entries that are gone
-    /// (a server session that cannot be re-entered, a deleted folder) are dropped on the way.
+    /// Walks the history in one direction until an entry can be shown. Entries that cannot be
+    /// shown right now (a deleted folder, a server session that is not re-enterable from here)
+    /// are stepped over but kept: a session may become reachable again later.
     private func step(_ direction: Int) {
         var target = historyIndex + direction
         while history.indices.contains(target) {
@@ -240,10 +242,7 @@ public class PaneModel: ObservableObject, Identifiable {
                 historyIndex = target
                 return
             }
-            history.remove(at: target)
-            historyConnections.remove(at: target)
-            if direction < 0 { historyIndex -= 1 }
-            target = historyIndex + direction
+            target += direction
         }
     }
 

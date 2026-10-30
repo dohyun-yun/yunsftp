@@ -283,7 +283,7 @@ public struct FileListView: View {
                                             let pwd = pane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
                                             return RemoteDragProvider.make(item: item, connection: conn, password: pwd)
                                         }
-                                        return NSItemProvider(object: item.url as NSURL)
+                                        return DragDropManager.shared.makeProvider(for: item.url)
                                     },
                                     onDropOntoFolder: { providers in
                                         onActivate()
@@ -657,7 +657,7 @@ public struct FileRowView: View {
         .onDrag {
             onActivate()
             onDragStart()
-            return dragProvider?() ?? NSItemProvider(object: item.url as NSURL)
+            return dragProvider?() ?? DragDropManager.shared.makeProvider(for: item.url)
         }
         .onDrop(of: [.fileURL, .url, .text, .plainText], isTargeted: $isFolderDropTarget) { providers in
             onActivate()

@@ -39,6 +39,7 @@ public enum RemoteDragProvider {
         }
         // Internal pane-to-pane drops still read the sftp URL; invisible to other processes.
         provider.registerObject(item.url as NSURL, visibility: .ownProcess)
+        DragDropManager.attachSessionMarker(to: provider)
         return provider
     }
 

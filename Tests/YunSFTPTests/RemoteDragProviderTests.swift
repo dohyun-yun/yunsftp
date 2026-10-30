@@ -36,7 +36,8 @@ final class RemoteDragProviderTests: XCTestCase {
         }
         XCTAssertEqual(content, "dragged")
 
-        // Our own panes still see the sftp URL.
+        // Our own panes still see the sftp URL and the drag-session marker.
         XCTAssertTrue(provider.canLoadObject(ofClass: NSURL.self))
+        XCTAssertTrue(DragDropManager.isInternalDrop(providers: [provider]))
     }
 }

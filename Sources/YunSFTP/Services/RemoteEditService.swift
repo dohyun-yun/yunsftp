@@ -35,7 +35,7 @@ public final class RemoteEditService: ObservableObject {
     @discardableResult
     public func edit(item: FileItem, connection: RemoteConnection, password: String?, open: Bool = true) async throws -> Session {
         let remotePath = SFTPService.normalizeRemotePath(item.url.path)
-        if let existing = sessions.first(where: { $0.remotePath == remotePath && $0.connection.id == connection.id }) {
+        if let existing = sessions.first(where: { $0.remotePath == remotePath && $0.connection.isSameServer(as: connection) }) {
             if open { NSWorkspace.shared.open(existing.localURL) }
             return existing
         }

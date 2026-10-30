@@ -14,12 +14,34 @@ public class DragDropManager: ObservableObject {
 
     public init() {}
 
+    /// Private pasteboard type that marks providers created by this app's own drags. Finder never
+    /// supplies it, so its presence on a drop is what makes the drop "internal".
+    nonisolated public static let sessionMarkerType = "com.finsternis.yunsftp.drag-session"
+
     public func startDrag(items: [FileItem], from pane: PaneModel) {
         self.draggedItems = items
         self.sourcePaneId = pane.id
         self.sourceIsRemote = pane.isRemote
         self.sourceConnection = pane.remoteConnection
         self.sourceRemotePassword = pane.remotePassword
+    }
+
+    /// Provider for a local item: the file URL plus the session marker.
+    public func makeProvider(for url: URL) -> NSItemProvider {
+        let provider = NSItemProvider(object: url as NSURL)
+        Self.attachSessionMarker(to: provider)
+        return provider
+    }
+
+    nonisolated public static func attachSessionMarker(to provider: NSItemProvider) {
+        provider.registerDataRepresentation(forTypeIdentifier: sessionMarkerType, visibility: .ownProcess) { completion in
+            completion(Data("1".utf8), nil)
+            return nil
+        }
+    }
+
+    nonisolated public static func isInternalDrop(providers: [NSItemProvider]) -> Bool {
+        providers.contains { $0.hasItemConformingToTypeIdentifier(sessionMarkerType) }
     }
 
     public func endDrag() {
@@ -37,9 +59,22 @@ public class DragDropManager: ObservableObject {
         externalProviders: [NSItemProvider] = [],
         completion: @escaping () -> Void
     ) {
-        // Resolve what was actually dropped first. Internal drags carry our own URLs (local file
-        // URLs, or the sftp URL registered for this process); a stale internal state from a drag
-        // that ended in another app never matches a later Finder drop.
+        // Our own drags mark their providers; a drop that carries the marker transfers the whole
+        // dragged selection (SwiftUI only hands over the row under the cursor). Anything else is an
+        // external drop, and whatever was cached belonged to a drag that ended in another app.
+        if !draggedItems.isEmpty && (externalProviders.isEmpty || Self.isInternalDrop(providers: externalProviders)) {
+            let items = self.draggedItems
+            let srcRemote = self.sourceIsRemote
+            let srcConn = self.sourceConnection
+            let srcPwd = self.sourceRemotePassword
+            self.endDrag()
+            executeTransfer(items: items, sourceIsRemote: srcRemote, sourceConn: srcConn, sourcePwd: srcPwd,
+                            targetPane: targetPane, targetSubfolder: targetSubfolder, completion: completion)
+            return
+        }
+        endDrag()
+        guard !externalProviders.isEmpty else { return }
+
         var collectedURLs: [URL] = []
         let group = DispatchGroup()
 
@@ -68,18 +103,6 @@ public class DragDropManager: ObservableObject {
         }
 
         group.notify(queue: .main) {
-            let internalItems = Self.internalItems(dragged: self.draggedItems, dropped: collectedURLs, hadProviders: !externalProviders.isEmpty)
-            if !internalItems.isEmpty {
-                let items = internalItems
-                let srcRemote = self.sourceIsRemote
-                let srcConn = self.sourceConnection
-                let srcPwd = self.sourceRemotePassword
-                self.endDrag()
-                self.executeTransfer(items: items, sourceIsRemote: srcRemote, sourceConn: srcConn, sourcePwd: srcPwd,
-                                     targetPane: targetPane, targetSubfolder: targetSubfolder, completion: completion)
-                return
-            }
-            self.endDrag()   // whatever was cached belonged to a drag that ended elsewhere
             guard !collectedURLs.isEmpty else { return }
             let items = collectedURLs.filter { $0.isFileURL }.map { FileItem(url: $0) }
             guard !items.isEmpty else { return }
@@ -93,30 +116,6 @@ public class DragDropManager: ObservableObject {
                 completion: completion
             )
         }
-    }
-
-    /// The dragged items that were actually dropped. A stale cache from a drag that ended in
-    /// another app only ever contributes the items the user dropped again, never the whole set.
-    static func internalItems(dragged: [FileItem], dropped: [URL], hadProviders: Bool) -> [FileItem] {
-        guard !dragged.isEmpty else { return [] }
-        guard hadProviders else { return dragged }
-        let droppedKeys = Set(dropped.map(normalizedKey))
-        return dragged.filter { droppedKeys.contains(normalizedKey($0.url)) }
-    }
-
-    static func isInternalDrop(dragged: [FileItem], dropped: [URL], hadProviders: Bool) -> Bool {
-        !internalItems(dragged: dragged, dropped: dropped, hadProviders: hadProviders).isEmpty
-    }
-
-    /// Stable identity across the pasteboard round trip (trailing slashes, percent-encoding, NFD/NFC).
-    static func normalizedKey(_ url: URL) -> String {
-        if url.isFileURL {
-            var p = url.standardizedFileURL.path.precomposedStringWithCanonicalMapping
-            if p.count > 1 && p.hasSuffix("/") { p.removeLast() }
-            return "file:" + p
-        }
-        let path = SFTPService.normalizeRemotePath(url.path)
-        return "\(url.scheme ?? ""):\(url.host ?? ""):\(url.port ?? 22)\(path)"
     }
 
     private func executeTransfer(

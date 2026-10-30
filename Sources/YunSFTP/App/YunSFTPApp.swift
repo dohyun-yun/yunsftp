@@ -122,6 +122,7 @@ struct YunSFTPApp: App {
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
         .commands {
+            ToolbarCommands()
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") { Self.openSettings() }
                     .keyboardShortcut(",", modifiers: .command)

@@ -20,18 +20,13 @@ public struct KnownHosts: Sendable {
     /// `keyType` is the wire name (e.g. `ssh-ed25519`), `keyBase64` the base64 blob as in known_hosts.
     public func verdict(host: String, port: Int, keyType: String, keyBase64: String) -> Verdict {
         let pattern = Self.hostPattern(host: host, port: port)
+        let matching = entries().filter { $0.matches(pattern) }
+        // Revocations win regardless of where they appear in the file (OpenSSH semantics).
+        if matching.contains(where: { $0.marker == "@revoked" && $0.keyType == keyType && $0.keyBase64 == keyBase64 }) {
+            return .mismatch
+        }
         var sawHost = false
-        for entry in entries() {
-            guard entry.matches(pattern) else { continue }
-            switch entry.marker {
-            case "@cert-authority":
-                continue                                   // CA lines never vouch for a plain key
-            case "@revoked":
-                if entry.keyType == keyType && entry.keyBase64 == keyBase64 { return .mismatch }
-                continue
-            default:
-                break
-            }
+        for entry in matching where entry.marker == nil {      // CA lines never vouch for a plain key
             if entry.keyType != keyType { continue }   // a server may legitimately present several key types
             sawHost = true
             if entry.keyBase64 == keyBase64 { return .trusted }

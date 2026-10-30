@@ -344,7 +344,9 @@ public final class TransferCoordinator {
         private var lastTime = Date.distantPast
         func shouldReport(bytes: Int64, expected: Int64, now: Date = Date()) -> Bool {
             lock.lock(); defer { lock.unlock() }
-            let complete = expected > 0 && bytes >= expected
+            // Directory transfers report the entry's own size as `expected`; once bytes overshoot
+            // it the total is unknown, so only the step/time rule applies (no per-chunk storm).
+            let complete = expected > 0 && bytes == expected
             let step = max(expected / 100, 64 * 1024)
             guard complete || bytes - lastBytes >= step || now.timeIntervalSince(lastTime) >= 0.2 else { return false }
             lastBytes = bytes; lastTime = now

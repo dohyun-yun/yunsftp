@@ -141,6 +141,10 @@ final class NativeEngineTests: XCTestCase {
         _ = try? await SFTPService.shared.listDirectory(path: remote.path, connection: conn, password: "whatever")
         let used = await SFTPService.shared.lastEngineUsed[conn.id]
         XCTAssertEqual(used, .openSSH)
+        // …but a password rejection must not pin the connection to OpenSSH: the next attempt
+        // (e.g. after the user corrects the password) goes native again.
+        let nativeAgain = await SFTPService.shared.useNative(for: conn)
+        XCTAssertTrue(nativeAgain)
     }
 
     func testConcurrentFirstUseSharesOneSessionAndEditsGetAFreshOne() async throws {
@@ -152,15 +156,19 @@ final class NativeEngineTests: XCTestCase {
         let count = await NativeSFTPEngine.shared.sessionCount
         XCTAssertEqual(count, 1, "three concurrent first calls must share one SSH session")
 
-        var edited = conn; edited.keyFilePath = server.clientKeyPath + ""; edited.username = NSUserName()   // same values, same fingerprint
-        _ = try await SFTPService.shared.listDirectory(path: remote.path, connection: edited, password: nil)
-        let still = await NativeSFTPEngine.shared.sessionCount
-        XCTAssertEqual(still, 1)
-        edited.port = server.port   // unchanged
-        edited.name = "renamed only"
-        _ = try await SFTPService.shared.listDirectory(path: remote.path, connection: edited, password: nil)
+        var renamed = conn; renamed.name = "renamed only"
+        _ = try await SFTPService.shared.listDirectory(path: remote.path, connection: renamed, password: nil)
         let afterRename = await NativeSFTPEngine.shared.sessionCount
         XCTAssertEqual(afterRename, 1, "cosmetic edits keep the session")
+
+        // A fingerprint-bearing edit (another key file) gets its own session.
+        let otherKey = base.appendingPathComponent("client-copy")
+        try FileManager.default.copyItem(atPath: server.clientKeyPath, toPath: otherKey.path)
+        var edited = conn; edited.keyFilePath = otherKey.path
+        XCTAssertNotEqual(conn.sessionFingerprint, edited.sessionFingerprint)
+        _ = try await SFTPService.shared.listDirectory(path: remote.path, connection: edited, password: nil)
+        let afterEdit = await NativeSFTPEngine.shared.sessionCount
+        XCTAssertEqual(afterEdit, 2)
     }
 
     func testRefusedPortProducesATranslatedConnectionError() async throws {

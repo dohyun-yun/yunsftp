@@ -66,3 +66,13 @@ extension KnownHostsTests {
         XCTAssertEqual(kh.verdict(host: "old.example", port: 22, keyType: "ssh-rsa", keyBase64: "AAAAold"), .trusted)
     }
 }
+
+extension KnownHostsTests {
+    func testRevocationWinsEvenWhenAppendedAfterTheTrustedLine() throws {
+        let kh = try store("""
+        nas.example ssh-ed25519 AAAAbad
+        @revoked nas.example ssh-ed25519 AAAAbad
+        """)
+        XCTAssertEqual(kh.verdict(host: "nas.example", port: 22, keyType: "ssh-ed25519", keyBase64: "AAAAbad"), .mismatch)
+    }
+}

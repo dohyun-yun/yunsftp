@@ -209,3 +209,13 @@ extension TransferCoordinatorTests {
         XCTAssertTrue(t.shouldReport(bytes: 10_000_000, expected: 10_000_000, now: now), "completion always reported")
     }
 }
+
+extension TransferCoordinatorTests {
+    func testProgressThrottleTreatsOvershootAsUnknownTotal() {
+        let t = TransferCoordinator.ProgressThrottle()
+        let now = Date()
+        XCTAssertTrue(t.shouldReport(bytes: 4096, expected: 4096, now: now))                 // "folder size" reached
+        XCTAssertFalse(t.shouldReport(bytes: 8192, expected: 4096, now: now), "past the nominal total: step/time rule, not every chunk")
+        XCTAssertTrue(t.shouldReport(bytes: 4096 + 70_000, expected: 4096, now: now), "64 KB step")
+    }
+}

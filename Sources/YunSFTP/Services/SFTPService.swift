@@ -146,8 +146,8 @@ public actor SFTPService {
             let result = try await op()
             lastEngineUsed[connection.id] = .native
             return result
-        } catch is NativeSFTPEngine.EngineUnsupported {
-            nativeFallback.insert(connection.sessionFingerprint)
+        } catch let unsupported as NativeSFTPEngine.EngineUnsupported {
+            if unsupported.pinsFallback { nativeFallback.insert(connection.sessionFingerprint) }
             lastEngineUsed[connection.id] = .openSSH
             return nil
         }

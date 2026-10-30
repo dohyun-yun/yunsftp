@@ -32,6 +32,7 @@ public struct MainWindowView: View {
     @State private var connectSheetAutoRunTest: Bool = false
     @State private var showCompareSyncSheet: Bool = false
     @State private var showBatchRenameSheet: Bool = false
+    @State private var showRemoteSearchSheet: Bool = false
 
     private var activePane: PaneModel {
         if activePaneId == rightPane.id && isDualPane {
@@ -199,6 +200,9 @@ public struct MainWindowView: View {
                         if let first = activePane.firstSelectedItem {
                             infoItem = first
                         }
+                    },
+                    onFindOnServer: {
+                        if activePane.isRemote { showRemoteSearchSheet = true }
                     }
                 )
             }
@@ -248,6 +252,18 @@ public struct MainWindowView: View {
         }
         .sheet(isPresented: $showCompareSyncSheet) {
             CompareSyncSheet(leftPane: leftPane, rightPane: rightPane)
+        }
+        .sheet(isPresented: $showRemoteSearchSheet) {
+            RemoteSearchSheet(pane: activePane) { found in
+                let parent = (found.remotePath as NSString).deletingLastPathComponent
+                let pane = activePane
+                pane.navigateToRemote(path: parent.isEmpty ? "/" : parent)
+                if let conn = pane.remoteConnection {
+                    let url = SFTPService.sftpURL(host: conn.host, port: conn.port, path: found.remotePath)
+                    pane.selectedItemURLs = [url]
+                    pane.focusedItemURL = url
+                }
+            }
         }
         .sheet(isPresented: $showBatchRenameSheet) {
             BatchRenameSheet(items: activePane.effectiveSelectedItems, pane: activePane) {
@@ -352,6 +368,9 @@ public struct MainWindowView: View {
                 },
                 onGoToPath: {
                     activePane.pathEditRequest += 1
+                },
+                onFindOnServer: {
+                    if activePane.isRemote { showRemoteSearchSheet = true }
                 },
                 onTypeChar: { char in activePane.selectMatchingPrefix(char) }
             )
@@ -895,6 +914,7 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
     var onToggleHidden: (() -> Void)? = nil
     var onToggleFilter: (() -> Void)? = nil
     var onGoToPath: (() -> Void)? = nil
+    var onFindOnServer: (() -> Void)? = nil
     let onTypeChar: (String) -> Void
 
     /// Testable helper verifying whether a key event should trigger file deletion (`Cmd+Backspace`, `Ctrl+Backspace`, or `Forward Delete`).
@@ -965,6 +985,7 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
         view.onToggleHidden = onToggleHidden
         view.onToggleFilter = onToggleFilter
         view.onGoToPath = onGoToPath
+        view.onFindOnServer = onFindOnServer
         view.onTypeChar = onTypeChar
     }
 
@@ -1000,6 +1021,7 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
         var onToggleHidden: (() -> Void)?
         var onToggleFilter: (() -> Void)?
         var onGoToPath: (() -> Void)?
+        var onFindOnServer: (() -> Void)?
         var onTypeChar: ((String) -> Void)?
         private var monitor: Any?
 
@@ -1078,6 +1100,12 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
                         DispatchQueue.main.async {
                             self.onNewFolder?()
                         }
+                        return nil
+                    }
+
+                    // Cmd + Shift + F (Find on Server) - keyCode 3
+                    if (event.keyCode == 3 || charKey == "f") && isCmd && isShift && !isCtrl {
+                        DispatchQueue.main.async { self.onFindOnServer?() }
                         return nil
                     }
 

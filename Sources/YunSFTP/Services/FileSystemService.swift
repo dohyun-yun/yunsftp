@@ -228,6 +228,19 @@ public actor FileSystemService {
         return c.count >= a.count && Array(c.prefix(a.count)) == a
     }
 
+    /// Total size of all regular files below `url` (symlinks not followed). Errors are skipped.
+    public static func directorySize(_ url: URL) -> Int64 {
+        guard let e = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey], options: []) else { return 0 }
+        var total: Int64 = 0
+        for case let f as URL in e {
+            if Task.isCancelled { break }
+            if let v = try? f.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]), v.isRegularFile == true {
+                total += Int64(v.fileSize ?? 0)
+            }
+        }
+        return total
+    }
+
     /// Where a "keep both" copy/download of `fileName` into `directory` will land. Shared by the
     /// local copy path, SFTP downloads and the progress monitors so they all agree on the name.
     public static func plannedDestinationURL(fileName: String, in directory: URL) -> URL {

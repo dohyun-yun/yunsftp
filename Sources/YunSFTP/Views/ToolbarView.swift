@@ -17,6 +17,7 @@ public struct ToolbarView: CustomizableToolbarContent {
     var onCompareSync: () -> Void
     var onOpenTerminal: () -> Void
     var onGetInfo: () -> Void
+    var onFindOnServer: () -> Void = {}
 
     public static let primaryItemIDs = ["connect", "copy", "move", "newFolder", "delete", "quickLook", "more"]
     public static let secondaryItemIDs = ["dualPane", "refresh", "permissions", "batchRename", "sync", "terminal", "info"]
@@ -57,6 +58,7 @@ public struct ToolbarView: CustomizableToolbarContent {
                 Button(action: onChmod) { Label("Permissions…", systemImage: "lock.shield") }
                 Button(action: onBatchRename) { Label("Multi-Rename…", systemImage: "character.cursor.ibeam") }
                 Button(action: onCompareSync) { Label("Compare & Sync…", systemImage: "arrow.triangle.2.circlepath") }
+                Button(action: onFindOnServer) { Label("Find on Server…", systemImage: "magnifyingglass.circle") }
                 Divider()
                 Button(action: onOpenTerminal) { Label("Open in Terminal", systemImage: "terminal") }
             } label: {

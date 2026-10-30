@@ -300,6 +300,50 @@ public actor SFTPService {
         return parseLsOutput(output, parentPath: targetPath)
     }
 
+    /// Sum of file sizes below `remotePath` (SFTP has no `du`; one listing per directory).
+    public func directorySize(remotePath: String, connection: RemoteConnection, password: String?, maxDepth: Int = 20) async throws -> Int64 {
+        let effectivePwd = resolvePassword(password: password, connection: connection)
+        var total: Int64 = 0
+        var queue: [(String, Int)] = [(Self.normalizeRemotePath(remotePath), 0)]
+        while !queue.isEmpty {
+            try Task.checkCancellation()
+            let (dir, depth) = queue.removeFirst()
+            let items = try await listDirectory(path: dir, connection: connection, password: effectivePwd)
+            for item in items {
+                if item.isSymlink { continue }   // neither followed nor counted, like the local walker
+                if item.isDirectory {
+                    if depth < maxDepth { queue.append((item.remotePath, depth + 1)) }
+                } else {
+                    total += item.size
+                }
+            }
+        }
+        return total
+    }
+
+    /// Breadth-first, case-insensitive name search below `root`.
+    public func search(root: String, query: String, connection: RemoteConnection, password: String?, maxResults: Int = 500, maxDepth: Int = 8) async throws -> [RemoteFileItem] {
+        let effectivePwd = resolvePassword(password: password, connection: connection)
+        let needle = query.precomposedStringWithCanonicalMapping.lowercased()
+        var found: [RemoteFileItem] = []
+        var queue: [(String, Int)] = [(Self.normalizeRemotePath(root), 0)]
+        while !queue.isEmpty && found.count < maxResults {
+            try Task.checkCancellation()
+            let (dir, depth) = queue.removeFirst()
+            let items = (try? await listDirectory(path: dir, connection: connection, password: effectivePwd)) ?? []
+            for item in items {
+                if item.name.lowercased().contains(needle) {
+                    found.append(item)
+                    if found.count >= maxResults { break }
+                }
+                if item.isDirectory && !item.isSymlink && depth < maxDepth {
+                    queue.append((item.remotePath, depth + 1))
+                }
+            }
+        }
+        return found
+    }
+
     public func resolvePassword(password: String?, connection: RemoteConnection) -> String? {
         if let pwd = password, !pwd.isEmpty {
             return pwd

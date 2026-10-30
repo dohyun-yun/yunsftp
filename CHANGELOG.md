@@ -14,8 +14,19 @@ All notable changes to this project are documented here. The format follows
 - Create the `SSH_ASKPASS` helper atomically with mode `0700`.
 
 ### Added
+- Settings window (`⌘,`): relative dates, visible columns, font size, delete confirmation, terminal app, legacy algorithms default, update check.
+- Import connections from `~/.ssh/config` and Cyberduck bookmarks; first-run welcome banner.
+- Conflict dialog (Replace / Keep Both / Skip / Cancel, apply to all) for every transfer kind.
+- Transfers window (`⌘⇧T`) with queue, history, per-row cancel and retry; cancels are scoped to their batch.
+- Edit remote files in an external editor with automatic upload on save.
+- Undo (`⌘Z`) for local rename, move and trash.
+- Remote folder bookmarks (★ in the path bar) and recent folders per connection.
+- Folder size in Get Info; recursive "Find on Server" (`⌘⇧F`).
+- `⌘F` on-demand filter, `⌘⇧G` go to folder, customizable toolbar with a More menu.
+- Daily update check against GitHub Releases (opt-out) and a "Check for Updates…" menu item.
+- Tag-triggered release workflow with optional Developer ID signing and notarization.
 - Per-connection "Allow legacy SSH algorithms" toggle (off by default) for devices that only offer SHA-1 key exchange / `ssh-rsa`.
-- CI workflow, SECURITY.md, CONTRIBUTING.md, issue and PR templates.
+- CI workflow, SECURITY.md, CONTRIBUTING.md, issue and PR templates, Korean README.
 
 ### Changed
 - Reuse SSH sessions through `ControlMaster` (faster navigation, single login per server).
@@ -23,6 +34,7 @@ All notable changes to this project are documented here. The format follows
 - Hide protocols that are not implemented (FTP/SMB/WebDAV).
 
 ### Fixed
+- Opening a local favourite or device while connected to a server no longer treats it as a remote path; Back returns to the server session.
 - `zip` arguments are terminated with `--`; moving `/a/b` into `/a/bc` is no longer rejected.
 - Manual ForkLift 2 import no longer overwrites current view settings.
 

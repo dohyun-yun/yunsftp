@@ -6,6 +6,33 @@ enum DemoHelper {
         CommandLine.arguments.contains("--demo-screenshot")
     }
 
+    /// `--appearance light|dark` forces the window appearance for documentation screenshots.
+    static var forcedAppearance: NSAppearance? {
+        guard let idx = CommandLine.arguments.firstIndex(of: "--appearance"), idx + 1 < CommandLine.arguments.count else { return nil }
+        switch CommandLine.arguments[idx + 1] {
+        case "dark": return NSAppearance(named: .darkAqua)
+        case "light": return NSAppearance(named: .aqua)
+        default: return nil
+        }
+    }
+
+    /// The main browser window: the largest visible one (Settings/Transfers windows are smaller).
+    @MainActor
+    static var mainWindow: NSWindow? {
+        NSApplication.shared.windows.filter { $0.isVisible }.max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
+    }
+
+    static func render(_ view: NSView, to url: URL, scale: CGFloat) -> Bool {
+        let s = max(2, scale)   // documentation screenshots are always 2x
+        let w = Int(view.bounds.width * s), h = Int(view.bounds.height * s)
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8, samplesPerPixel: 4,
+                                         hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return false }
+        rep.size = view.bounds.size
+        view.cacheDisplay(in: view.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else { return false }
+        return (try? png.write(to: url)) != nil
+    }
+
     static var screenshotOutputPath: String? {
         if let idx = CommandLine.arguments.firstIndex(of: "--demo-screenshot"), idx + 1 < CommandLine.arguments.count {
             return CommandLine.arguments[idx + 1]
@@ -47,10 +74,10 @@ enum DemoHelper {
 
         let now = Date()
         let remoteItems: [FileItem] = [
-            FileItem(virtualURL: remoteBase.appendingPathComponent("assets"), name: "assets", isDirectory: true, size: 0, modificationDate: now.addingTimeInterval(-3600 * 2), permissions: "rwxr-xr-x", kind: "Remote Folder"),
-            FileItem(virtualURL: remoteBase.appendingPathComponent("config"), name: "config", isDirectory: true, size: 0, modificationDate: now.addingTimeInterval(-3600 * 4), permissions: "rwxr-xr-x", kind: "Remote Folder"),
-            FileItem(virtualURL: remoteBase.appendingPathComponent("public"), name: "public", isDirectory: true, size: 0, modificationDate: now.addingTimeInterval(-3600 * 6), permissions: "rwxr-xr-x", kind: "Remote Folder"),
-            FileItem(virtualURL: remoteBase.appendingPathComponent("src"), name: "src", isDirectory: true, size: 0, modificationDate: now.addingTimeInterval(-3600 * 8), permissions: "rwxr-xr-x", kind: "Remote Folder"),
+            FileItem(virtualURL: remoteBase.appendingPathComponent("assets"), name: "assets", isDirectory: true, size: 0, modificationDate: now.addingTimeInterval(-3600 * 2), permissions: "rwxr-xr-x", kind: "Folder"),
+            FileItem(virtualURL: remoteBase.appendingPathComponent("config"), name: "config", isDirectory: true, size: 0, modificationDate: now.addingTimeInterval(-3600 * 4), permissions: "rwxr-xr-x", kind: "Folder"),
+            FileItem(virtualURL: remoteBase.appendingPathComponent("public"), name: "public", isDirectory: true, size: 0, modificationDate: now.addingTimeInterval(-3600 * 6), permissions: "rwxr-xr-x", kind: "Folder"),
+            FileItem(virtualURL: remoteBase.appendingPathComponent("src"), name: "src", isDirectory: true, size: 0, modificationDate: now.addingTimeInterval(-3600 * 8), permissions: "rwxr-xr-x", kind: "Folder"),
             FileItem(virtualURL: remoteBase.appendingPathComponent("backup-2026-10.tar.gz"), name: "backup-2026-10.tar.gz", isDirectory: false, size: 142_800_000, modificationDate: now.addingTimeInterval(-3600 * 12), permissions: "rw-r--r--", kind: "Archive"),
             FileItem(virtualURL: remoteBase.appendingPathComponent("docker-compose.yml"), name: "docker-compose.yml", isDirectory: false, size: 1_420, modificationDate: now.addingTimeInterval(-3600 * 14), permissions: "rw-r--r--", kind: "YAML"),
             FileItem(virtualURL: remoteBase.appendingPathComponent("index.html"), name: "index.html", isDirectory: false, size: 8_240, modificationDate: now.addingTimeInterval(-3600 * 16), permissions: "rw-r--r--", kind: "HTML"),
@@ -107,16 +134,6 @@ struct YunSFTPApp: App {
     }
 
     var body: some Scene {
-        Settings {
-            SettingsView()
-        }
-
-        Window("Transfers", id: "transfers") {
-            TransfersWindowView()
-        }
-        .keyboardShortcut("t", modifiers: [.command, .shift])
-        .defaultSize(width: 620, height: 400)
-
         WindowGroup {
             if DemoHelper.isDemoMode {
                 let demo = DemoHelper.createDemoPanes()
@@ -142,6 +159,17 @@ struct YunSFTPApp: App {
             // Single-window app: drop the default File > New items instead of offering a no-op.
             CommandGroup(replacing: .newItem) {}
         }
+
+        // Auxiliary scenes come after the main WindowGroup: the first scene is what opens at launch.
+        Settings {
+            SettingsView()
+        }
+
+        Window("Transfers", id: "transfers") {
+            TransfersWindowView()
+        }
+        .keyboardShortcut("t", modifiers: [.command, .shift])
+        .defaultSize(width: 620, height: 400)
     }
 }
 
@@ -151,21 +179,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.activate(ignoringOtherApps: true)
 
         if DemoHelper.isDemoMode, let outputPath = DemoHelper.screenshotOutputPath {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                if let win = NSApplication.shared.windows.first(where: { $0.isVisible }) {
+            if let appearance = DemoHelper.forcedAppearance {
+                NSApplication.shared.appearance = appearance
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                for w in NSApplication.shared.windows where w.isVisible && w != DemoHelper.mainWindow { w.orderOut(nil) }
+                if let win = DemoHelper.mainWindow {
+                    win.appearance = DemoHelper.forcedAppearance   // windows created before NSApp.appearance took effect
                     win.setFrame(NSRect(x: 100, y: 100, width: 1440, height: 820), display: true, animate: false)
                 }
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                if let win = NSApplication.shared.windows.first(where: { $0.isVisible }) {
-                    let winNum = win.windowNumber
-                    let proc = Process()
-                    proc.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-                    proc.arguments = ["-l", "\(winNum)", "-o", outputPath]
-                    try? proc.run()
-                    proc.waitUntilExit()
-                    print("DEMO_SCREENSHOT_CAPTURED_TO:", outputPath)
-                    exit(0)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                if let win = DemoHelper.mainWindow {
+                    // Render the whole window frame (title bar + toolbar + content) in-process:
+                    // no Screen Recording permission needed, unlike `screencapture -l`.
+                    let frameView = win.contentView?.superview ?? win.contentView!
+                    let ok = DemoHelper.render(frameView, to: URL(fileURLWithPath: outputPath), scale: win.backingScaleFactor)
+                    print(ok ? "DEMO_SCREENSHOT_CAPTURED_TO: \(outputPath)" : "DEMO_SCREENSHOT_FAILED")
+                    exit(ok ? 0 : 1)
                 }
             }
         } else {

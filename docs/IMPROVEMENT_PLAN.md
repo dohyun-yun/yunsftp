@@ -68,7 +68,7 @@ Legend as above. Order = execution order.
 - [ ] 41. Tabs per pane (`Cmd+T`, `Cmd+W`, `Cmd+Shift+]`).
 - [ ] 42. Drag remote files out to Finder via file promises.
 - [ ] 43. Localization: English + Korean String Catalog; `README.ko.md`.
-- [ ] 44. README restructure: hero, install in 30 seconds, feature grid, trust section, FAQ, roadmap, badges; refreshed light/dark screenshots.
+- [x] 44. README restructure: hero, install in 30 seconds, feature grid, trust section, FAQ, roadmap, badges; refreshed light/dark screenshots.
 - [-] 45. Native SFTP library (swift-nio-ssh) replacing the `sftp` process transport — needs a design decision with the owner.
 - [-] 46. SwiftUI `Table` prototype for the file list — only after 27/28 land; needs a spike to confirm selection behaviour parity.
 - [-] 47. Developer ID signing + notarization and Homebrew cask tap — need the owner's Apple Developer account and a tap repository.

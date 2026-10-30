@@ -1,173 +1,146 @@
 <p align="center">
-  <img src="Resources/app_icon.png" width="128" height="128" alt="yunsftp icon" style="border-radius: 26px;" />
+  <img src="Resources/app_icon.png" width="112" height="112" alt="yunsftp icon" />
 </p>
 
 <h1 align="center">yunsftp</h1>
 
 <p align="center">
-  <strong>An ultra-fast, ad-free, native dual-pane SFTP client and file manager built for Apple Silicon macOS.</strong><br>
-  Designed from the ground up with Swift, SwiftUI, and AppKit for maximum speed and simplicity.
+  <strong>A fast, native dual-pane SFTP client and file manager for Apple Silicon Macs.</strong><br>
+  Free and open source. No ads, no accounts, no telemetry.
 </p>
 
 <p align="center">
-  <a href="#-features"><img src="https://img.shields.io/badge/Platform-macOS%2013.0%2B-blue?logo=apple" alt="Platform"></a>
-  <a href="#-features"><img src="https://img.shields.io/badge/Architecture-Apple%20Silicon%20(arm64)-orange" alt="Apple Silicon"></a>
-  <a href="#-features"><img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift" alt="Swift 6"></a>
+  <a href="https://github.com/dohyun-yun/yunsftp/releases/latest"><img src="https://img.shields.io/github/v/release/dohyun-yun/yunsftp?label=Download&color=blue" alt="Latest release"></a>
   <a href="https://github.com/dohyun-yun/yunsftp/actions/workflows/ci.yml"><img src="https://github.com/dohyun-yun/yunsftp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/dohyun-yun/yunsftp/releases"><img src="https://img.shields.io/github/downloads/dohyun-yun/yunsftp/total?color=success" alt="Downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/No%20Ads-100%25%20Free-success" alt="100% Free">
 </p>
-
----
 
 <p align="center">
-  <img src="docs/assets/screenshot.png" width="920" alt="yunsftp Preview Screenshot" />
+  English · <a href="README.ko.md">한국어</a>
 </p>
 
-## 💡 Why yunsftp?
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshot-dark.png">
+    <img src="docs/assets/screenshot-light.png" width="920" alt="yunsftp: local folder on the right, SFTP server on the left">
+  </picture>
+</p>
 
-Many file transfer apps today ship as subscriptions, carry ads, or run inside heavy cross-platform runtimes. Older Intel-only tools also face obsolescence as Rosetta 2 is phased out.
+<p align="center">
+  <a href="https://github.com/dohyun-yun/yunsftp/releases/latest"><strong>Download for macOS</strong></a> · macOS 13 or later · Apple Silicon
+</p>
 
-**yunsftp** focuses on **fast, lightweight, clutter-free file management**. Built 100% native in **Swift + SwiftUI & AppKit**, it launches in well under a second, uses minimal memory, and gives you classic dual-pane productivity with macOS Finder keyboard parity.
+## Why yunsftp
 
----
+- **Two panes, one keystroke.** Local on one side, server on the other. `F5` copies, `F6` moves, drag and drop works in both directions and into subfolders.
+- **Feels like Finder.** The same keys do the same things: `Return` renames, `⌘↓` opens, `Space` toggles selection, `⌘⇧G` goes to a folder, `⌘Z` undoes.
+- **Honest about your files.** Korean and other non-ASCII names round-trip correctly between macOS (NFD) and Linux servers (NFC), name conflicts ask before anything is replaced, and remote deletes ask first.
+- **Nothing to configure, nothing phoning home.** Your passwords live in the macOS Keychain, host keys are verified against `~/.ssh/known_hosts`, and the only network request the app makes on its own is an optional once-a-day check of GitHub Releases.
 
-## ⚡️ At a Glance
+## Install in 30 seconds
 
-| | yunsftp |
-|:---|:---|
-| **Price / License** | Free, open source (MIT) |
-| **Ads / Tracking** | None. No analytics, accounts or license checks |
-| **Architecture** | Native arm64 (Apple Silicon), no Rosetta |
-| **Layout** | Side-by-side dual pane with `F5` / `F6` cross-pane copy & move |
-| **Keyboard** | Finder parity: `Enter`, `Cmd+Down`, `Space`, `Shift+Arrow` |
-| **Unicode paths** | Automatic NFC/NFD normalization and `ls` escape decoding |
-| **Credentials** | macOS Keychain via `Security.framework` |
-| **Transport** | System OpenSSH (`sftp`/`ssh`/`scp`) with host key verification |
+1. **Download** the `.dmg` from the [latest release](https://github.com/dohyun-yun/yunsftp/releases/latest) and drag `yunsftp.app` to `/Applications`.
+2. **First launch:** releases are not notarized yet, so macOS blocks the first open. Right-click `yunsftp.app` → **Open** → **Open** once, or run:
+   ```bash
+   xattr -d com.apple.quarantine /Applications/yunsftp.app
+   ```
+   Compare the download with `checksums.txt` on the release page if you want to be sure.
+3. **Optional:** grant **Full Disk Access** (System Settings → Privacy & Security) once, so external drives and protected folders open without prompts.
 
----
+Prefer building it yourself? See [Build from source](#build-from-source).
 
-## ✨ Key Features
+## Connect to your first server
 
-### 1. 100% Free & Open Source (No Ads, No Subscriptions)
-- No tracking scripts, no analytics, no account registration, and no license checks.
-- Clean and distraction-free interface focused purely on high-performance file management.
+1. Press **⌘K** (or click **Connect** in the toolbar) and add a host, user and password or key. Passwords can be saved to the Keychain.
+2. Already have servers in `~/.ssh/config`? The first-run banner and **Import…** in the connection manager pull them in, together with Cyberduck and ForkLift 2 bookmarks.
+3. Click a connection in the sidebar. Bookmark folders you come back to with the ★ in the path bar; recent folders are in the connection's context menu.
 
-### 2. True Dual-Pane Productivity
-- **Adjustable Split Views**: Freely resize left and right panes or press `Tab` to switch focus instantly.
-- **Cross-Pane Transfers**:
-  - `F5`: One-key copy to opposite pane (Local copy, SFTP upload, or SFTP download).
-  - `F6`: One-key move to opposite pane.
-- **Drag & Drop**: Drag between panes, drop directly into subfolders, or drag from macOS Finder.
-- **Live Transfer Metrics**: Animated top banner showing live progress percentage, transfer speed (`MB/s`), and remaining time.
+## What you get
 
-### 3. Finder Keyboard Parity & Precision Selection
-- **`Enter`**: In-place inline rename (original filename pre-filled with a spacious editor).
-- **`Cmd + Down` or Double-Click**: Enter folder or open file in default macOS app.
-- **`Backspace` or `Cmd + Up`**: Enclosing folder navigation.
-- **`Space`**: Toggle selection ON/OFF — move with arrow keys and toggle multiple non-contiguous files.
-- **`Shift + Up / Down`**: Continuous range selection with smart contraction when reversing direction.
-- **`Cmd + Backspace` / `Ctrl + Backspace`**: Move local files to Trash / safely delete remote SFTP files.
-- **`Cmd + Shift + N`**: Create new folder in current pane.
-- **`Cmd + K`**: Open Remote Connections Manager.
-- **Rubber-band Bounce Snap-Back**: Native horizontal scroll bounce that prevents stuck blank space at table margins.
-- **Interactive Headers**: Click anywhere on a table header cell to sort; hover on dividers to resize columns.
+| | |
+|:--|:--|
+| **🗂 Dual-pane transfers**<br>Copy/move between any two locations: local↔local, local↔server, server↔server. Keep-both, replace or skip on conflicts, with "apply to all". | **📋 Transfers window** (`⌘⇧T`)<br>Queue, per-item cancel that really stops the transfer, retry for failures, and history. |
+| **✏️ Edit on the server**<br>Open a remote file in your editor; every save uploads automatically until you stop the session. | **🔎 Find on server** (`⌘⇧F`)<br>Recursive name search below the current remote folder, double-click to reveal. |
+| **⌨️ Finder keyboard parity**<br>`Return`, `⌘↓`, `Space`, `⇧↑/↓` range selection, `⌘⇧N`, `⌘⌫`, `⌘F` filter, `⌘⇧G` go to folder, `⌘Z` undo. | **🧰 File tools**<br>Quick Look, Get Info with folder sizes, chmod, multi-rename, compare & sync, zip/unzip, open in Terminal or iTerm. |
+| **🌏 Unicode done right**<br>NFC/NFD normalization and decoding of `ls` escape sequences, so `한글 파일.txt` is `한글 파일.txt` everywhere. | **⚙️ Settings** (`⌘,`)<br>Relative dates, visible columns, font size, delete confirmation, terminal app, update check. Toolbar is customizable. |
 
-### 4. Resilient SFTP & Unicode Parity
-- **Full NFC / NFD Normalization**: Bridges macOS decomposed Unicode (NFD) and Linux server precomposed Unicode (NFC), preventing `"No such file or directory"` errors on foreign filenames.
-- **Real-Time C-Escape Decoding**: Automatically detects and decodes 8-bit octal (`\353\266\200...`) and 16-bit hex escape sequences into clean human-readable Unicode text.
-- **Clean Port Formatting**: Strict numeric port handling without localization commas (`2222` instead of `2,222`).
-- **Encrypted Keychain Storage**: Stores passwords securely using Apple's `Security.framework`.
-- **Host Key Verification**: Server keys are checked against `~/.ssh/known_hosts` (trust-on-first-use). A changed key aborts the connection with instructions.
-- **SSH Keys & Agent**: Unencrypted keys work directly. Passphrase-protected keys must be loaded into `ssh-agent` first (`ssh-add --apple-use-keychain ~/.ssh/id_ed25519`).
-- **Live Socket Diagnostics (`ConnectionTestService`)**: One-click TCP socket handshake, SSH banner inspection, and millisecond latency test.
+## Security and privacy
 
-### 5. Automatic Migration from ForkLift 2
-- Automatically detects and migrates existing bookmarks, SSH keys (`~/.ssh/id_ed25519`), custom ports, and favorite locations from `com.binarynights.ForkLift2.plist`.
+- Transfers run over the system OpenSSH (`sftp`, `ssh`, `scp`). Sessions are multiplexed, so one login serves many operations.
+- Host keys are checked against `~/.ssh/known_hosts` (trust on first use). A changed key stops the connection with an explanation.
+- Algorithms are OpenSSH defaults. A per-connection **Allow legacy SSH algorithms** switch exists for old devices and is off by default.
+- Passwords are stored in the macOS Keychain and handed to OpenSSH through a one-shot helper created with mode `0700`.
+- Remote deletes are confirmed and run inside the SFTP subsystem; the app never executes `rm` on your server.
+- Passphrase-protected keys must be loaded into `ssh-agent` first: `ssh-add --apple-use-keychain ~/.ssh/id_ed25519`.
+- Found something? See [SECURITY.md](SECURITY.md).
 
----
+<details>
+<summary><strong>Keyboard shortcuts</strong></summary>
 
-## ⌨️ Keyboard Shortcuts Reference
+| Shortcut | Action |
+|:--|:--|
+| `Tab` | Switch active pane |
+| `Return` | Rename |
+| `⌘↓` / double-click | Open folder or file |
+| `⌫` / `⌘↑` | Enclosing folder |
+| `Space` | Toggle selection of the focused item |
+| `⇧↑` / `⇧↓` | Extend or shrink the selection |
+| `⌘A` | Select all |
+| `F5` / `F6` | Copy / move to the other pane |
+| `⌘C` / `⌘X` / `⌘V` | Copy / cut / paste (also from Finder) |
+| `⌘⌫` | Move to Trash (local) / delete (server, asks first) |
+| `⌘D` | Duplicate |
+| `⌘⇧N` | New folder |
+| `⌘F` | Filter the current folder |
+| `⌘⇧F` | Find on server |
+| `⌘⇧G` | Go to folder |
+| `⌘Y` | Quick Look |
+| `⌘I` | Get Info |
+| `⌘K` | Connections |
+| `⌘⇧T` | Transfers window |
+| `⌘⇧.` | Show hidden files |
+| `⌘Z` | Undo rename, move or trash (local) |
+| `Esc` | Close filter, deselect, dismiss sheets |
 
-| Shortcut | Action | Description |
-|:---|:---|:---|
-| `Space` | **Toggle Selection** | Select / deselect individual files while browsing |
-| `Enter` | **Rename** | In-place rename with current filename pre-filled |
-| `Cmd + Down` / Double-Click | **Open / Enter** | Enter folder or open file in default viewer |
-| `Backspace` / `Cmd + Up` | **Parent Folder** | Navigate up one directory level |
-| `Up` / `Down` | **Cursor Move** | Browse file and folder list |
-| `Shift + Up / Down` | **Range Selection** | Multi-item selection with natural contraction |
-| `Tab` | **Switch Pane** | Toggle active focus between Left and Right panes |
-| `Cmd + K` | **Connections** | Open Remote Connections Manager |
-| `F5` | **Copy** | Copy selected items to opposite pane (Upload/Download) |
-| `F6` | **Move** | Move selected items to opposite pane |
-| `Cmd + Shift + N` | **New Folder** | Create new folder in active directory |
-| `Cmd + Backspace` | **Delete** | Move local items to Trash / delete remote files |
-| `Ctrl + Backspace` | **SFTP Delete** | Alternative remote file removal |
-| `Cmd + D` | **Duplicate** | Create duplicate copy of selected item |
-| `Cmd + Shift + .` | **Hidden Files** | Toggle visibility of hidden dotfiles |
-| `Home` / `End` | **Jump Top / Bottom** | Jump to first or last item in current pane |
-| `Esc` | **Close** | Dismiss sheets, search bars, or previews |
+</details>
 
-> 📖 For detailed instructions and workflows, see the complete [User Guide](docs/USER_GUIDE.md).
+## FAQ
 
----
+**Korean (or other non-ASCII) file names show up garbled or "not found".**  
+yunsftp normalizes names to NFC and decodes `ls` escapes before using them, so this should not happen. If it does, open an issue with the server type and an example name.
 
-## 🚀 Installation
+**My Synology shows `/` instead of `/volume1`.**  
+SFTP on DSM is chrooted to the shares you enabled. Use the folder shown by the server as root; bookmarks work from there.
 
-### Option 1: Download Pre-built Release (Recommended)
-Download the latest `.dmg` installer or `.zip` archive from the [Releases](https://github.com/dohyun-yun/yunsftp/releases) page.
-- **DMG**: Double-click `yunsftp-<version>-macos-arm64.dmg` and drag `yunsftp.app` to your `/Applications` folder.
-- **ZIP**: Unzip `yunsftp-<version>-macos-arm64.zip` and move `yunsftp.app` to `/Applications`.
+**Connection fails with "no matching key exchange method".**  
+The device only offers SHA-1 algorithms. Edit the connection and enable **Allow legacy SSH algorithms** for that server only.
 
-> [!IMPORTANT]
-> **First launch (Gatekeeper)**  
-> Releases are ad-hoc signed and not notarized, so macOS blocks the first launch. Either right-click `yunsftp.app` → **Open** → **Open**, or run:
-> ```bash
-> xattr -d com.apple.quarantine /Applications/yunsftp.app
-> ```
-> Verify the download against `checksums.txt` on the release page before doing so.
+**Does the app send anything anywhere?**  
+Only to your servers. The optional update check requests `api.github.com/repos/dohyun-yun/yunsftp/releases/latest` once a day and can be turned off in Settings.
 
-### Option 2: Build from Source
-Ensure Xcode 16 or later (Swift 6 toolchain) command-line tools are installed:
+## Roadmap
+
+Progress is tracked in [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md). Next up: tabs per pane, dragging remote files straight into Finder, Korean UI localization, a native SFTP engine for true byte-level progress and resume, and signed/notarized releases.
+
+## Build from source
+
+Requirements: Apple Silicon Mac, Xcode 16 or later (Swift 6 toolchain). The app itself runs on macOS 13+.
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/dohyun-yun/yunsftp.git
 cd yunsftp
-
-# 2. Build release binary and install to /Applications
-./scripts/build_app.sh
-./scripts/install.sh
-
-# 3. Launch yunsftp
-open /Applications/yunsftp.app
+swift test                 # unit + integration tests (uses the local sftp-server)
+./scripts/build_app.sh     # build/yunsftp.app, ad-hoc signed
+./scripts/install.sh       # copy to /Applications
 ```
 
-> [!NOTE]
-> **Full Disk Access Setup**  
-> To browse system directories, external drives, and network shares without repeated permission prompts, grant Full Disk Access once:
-> 1. Open macOS **System Settings** > **Privacy & Security**
-> 2. Select **Full Disk Access**
-> 3. Toggle **yunsftp** to **ON** *(or add `/Applications/yunsftp.app`)*
+`scripts/package_release.sh` produces the dmg/zip/checksums; the same script runs in CI when a `v*` tag is pushed.
 
----
+## Contributing
 
-## 🧪 Automated Testing
+Bug reports and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first; the short version is one topic per PR, tests for behaviour changes, and no environment-specific values in the code.
 
-Unit and integration tests cover SFTP parity (against the local `sftp-server`), Unicode normalization, security hardening and UI interactions. They run on every push via GitHub Actions:
+## License
 
-```bash
-swift test
-```
-
-- **Parity Verification**: File copy, move, delete, directory creation, and in-place rename across local and SFTP environments.
-- **Escape & Unicode Engines**: NFC normalization, octal (`\353...`) and hex string restoration.
-- **UX & Interaction Integrity**: `Space` selection toggling, `Shift+Arrow` contraction, and comma-free port inputs.
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
-Enjoy a clean, fast, and ad-free file management experience on macOS!
+[MIT](LICENSE).

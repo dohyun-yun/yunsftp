@@ -6,14 +6,14 @@
 
 <p align="center">
   <strong>An ultra-fast, ad-free, native dual-pane SFTP client and file manager built for Apple Silicon macOS.</strong><br>
-  Designed from the ground up with Swift 6, SwiftUI, and AppKit for maximum speed and simplicity.
+  Designed from the ground up with Swift, SwiftUI, and AppKit for maximum speed and simplicity.
 </p>
 
 <p align="center">
-  <a href="#-features"><img src="https://img.shields.io/badge/Platform-macOS%2014.0%2B-blue?logo=apple" alt="Platform"></a>
+  <a href="#-features"><img src="https://img.shields.io/badge/Platform-macOS%2013.0%2B-blue?logo=apple" alt="Platform"></a>
   <a href="#-features"><img src="https://img.shields.io/badge/Architecture-Apple%20Silicon%20(arm64)-orange" alt="Apple Silicon"></a>
-  <a href="#-features"><img src="https://img.shields.io/badge/Swift-6.0-F05138?logo=swift" alt="Swift 6"></a>
-  <a href="#-automated-testing"><img src="https://img.shields.io/badge/Tests-43%20Passed%20(100%25)-brightgreen" alt="Tests"></a>
+  <a href="#-features"><img src="https://img.shields.io/badge/Swift-5.9%2B-F05138?logo=swift" alt="Swift 5.9+"></a>
+  <a href="https://github.com/dohyun-yun/yunsftp/actions/workflows/ci.yml"><img src="https://github.com/dohyun-yun/yunsftp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/No%20Ads-100%25%20Free-success" alt="100% Free">
 </p>
@@ -26,24 +26,24 @@
 
 ## 💡 Why yunsftp?
 
-Most file transfer apps today are bloated with paid subscription models, intrusive banner ads, or wrapped inside heavy Chromium/Electron runtimes that consume gigabytes of memory and take seconds to launch. Legacy Intel-only tools (like ForkLift 2) also face obsolescence when macOS discontinues Rosetta 2.
+Many file transfer apps today ship as subscriptions, carry ads, or run inside heavy cross-platform runtimes. Older Intel-only tools also face obsolescence as Rosetta 2 is phased out.
 
-**yunsftp** was created to return to what matters: **blazing fast, lightweight, and clutter-free file management**. Built 100% native in **Swift 6 + SwiftUI & AppKit**, it launches in under 0.2 seconds, uses minimal memory, and gives you total control through classic dual-pane productivity and full macOS Finder keyboard parity.
+**yunsftp** focuses on **fast, lightweight, clutter-free file management**. Built 100% native in **Swift + SwiftUI & AppKit**, it launches in well under a second, uses minimal memory, and gives you classic dual-pane productivity with macOS Finder keyboard parity.
 
 ---
 
-## ⚡️ Feature Comparison
+## ⚡️ At a Glance
 
-| Feature / Metric | yunsftp | Legacy ForkLift 2 | Commercial Clients | Electron-based Tools |
-|:---|:---:|:---:|:---:|:---:|
-| **Price / License** | **100% Free (MIT)** | Free (Discontinued) | $20–$40/yr Subscriptions | Ad-supported or freemium |
-| **Ads / Tracking** | **Zero (Clean)** | None | Upsell banners | Built-in telemetry / ads |
-| **Architecture** | **Native arm64 (M1–M4)** | Intel (Rosetta 2 required) | Universal | Heavy Chromium runtime |
-| **Startup Time** | **< 0.2 seconds** | ~1.5 seconds | ~1.2 seconds | 3–5 seconds |
-| **Dual-Pane Side-by-Side**| **Yes (Interactive)** | Yes | Single-pane or tabbed | Single-window view |
-| **Finder Keyboard Parity**| **Full (`Enter`, `Cmd+Down`, `Space`)**| Partial | Custom keybindings | Browser-style shortcuts |
-| **Korean / Unicode Paths**| **Automatic NFC/NFD & C-escape fix**| Prone to errors | Inconsistent | Encoding issues common |
-| **System Keychain** | **Apple Security.framework** | Keychain | Custom vaults | Plaintext or app vault |
+| | yunsftp |
+|:---|:---|
+| **Price / License** | Free, open source (MIT) |
+| **Ads / Tracking** | None. No analytics, accounts or license checks |
+| **Architecture** | Native arm64 (Apple Silicon), no Rosetta |
+| **Layout** | Side-by-side dual pane with `F5` / `F6` cross-pane copy & move |
+| **Keyboard** | Finder parity: `Enter`, `Cmd+Down`, `Space`, `Shift+Arrow` |
+| **Unicode paths** | Automatic NFC/NFD normalization and `ls` escape decoding |
+| **Credentials** | macOS Keychain via `Security.framework` |
+| **Transport** | System OpenSSH (`sftp`/`ssh`/`scp`) with host key verification |
 
 ---
 
@@ -78,9 +78,11 @@ Most file transfer apps today are bloated with paid subscription models, intrusi
 - **Real-Time C-Escape Decoding**: Automatically detects and decodes 8-bit octal (`\353\266\200...`) and 16-bit hex escape sequences into clean human-readable Unicode text.
 - **Clean Port Formatting**: Strict numeric port handling without localization commas (`2222` instead of `2,222`).
 - **Encrypted Keychain Storage**: Stores passwords securely using Apple's `Security.framework`.
+- **Host Key Verification**: Server keys are checked against `~/.ssh/known_hosts` (trust-on-first-use). A changed key aborts the connection with instructions.
+- **SSH Keys & Agent**: Unencrypted keys work directly. Passphrase-protected keys must be loaded into `ssh-agent` first (`ssh-add --apple-use-keychain ~/.ssh/id_ed25519`).
 - **Live Socket Diagnostics (`ConnectionTestService`)**: One-click TCP socket handshake, SSH banner inspection, and millisecond latency test.
 
-### 5. Automatic Migration from Legacy ForkLift 2
+### 5. Automatic Migration from ForkLift 2
 - Automatically detects and migrates existing bookmarks, SSH keys (`~/.ssh/id_ed25519`), custom ports, and favorite locations from `com.binarynights.ForkLift2.plist`.
 
 ---
@@ -115,11 +117,19 @@ Most file transfer apps today are bloated with paid subscription models, intrusi
 
 ### Option 1: Download Pre-built Release (Recommended)
 Download the latest `.dmg` installer or `.zip` archive from the [Releases](https://github.com/dohyun-yun/yunsftp/releases) page.
-- **DMG**: Double-click `yunsftp-v1.0.0-macos-arm64.dmg` and drag `yunsftp.app` to your `/Applications` folder.
-- **ZIP**: Unzip `yunsftp-v1.0.0-macos-arm64.zip` and move `yunsftp.app` to `/Applications`.
+- **DMG**: Double-click `yunsftp-<version>-macos-arm64.dmg` and drag `yunsftp.app` to your `/Applications` folder.
+- **ZIP**: Unzip `yunsftp-<version>-macos-arm64.zip` and move `yunsftp.app` to `/Applications`.
+
+> [!IMPORTANT]
+> **First launch (Gatekeeper)**  
+> Releases are ad-hoc signed and not notarized, so macOS blocks the first launch. Either right-click `yunsftp.app` → **Open** → **Open**, or run:
+> ```bash
+> xattr -d com.apple.quarantine /Applications/yunsftp.app
+> ```
+> Verify the download against `checksums.txt` on the release page before doing so.
 
 ### Option 2: Build from Source
-Ensure Swift 6 and Xcode command-line tools are installed:
+Ensure Xcode 15 or later (Swift 5.9+) command-line tools are installed:
 
 ```bash
 # 1. Clone the repository
@@ -145,15 +155,10 @@ open /Applications/yunsftp.app
 
 ## 🧪 Automated Testing
 
-`yunsftp` includes 43 automated unit and integration tests verifying SFTP parity, Unicode normalization, and UI interactions:
+Unit and integration tests cover SFTP parity (against the local `sftp-server`), Unicode normalization, security hardening and UI interactions. They run on every push via GitHub Actions:
 
 ```bash
 swift test
-```
-
-```text
-Test Suite 'All tests' passed at 2026-10-18.
-Executed 43 tests, with 0 failures (0 unexpected) in 0.846 seconds.
 ```
 
 - **Parity Verification**: File copy, move, delete, directory creation, and in-place rename across local and SFTP environments.

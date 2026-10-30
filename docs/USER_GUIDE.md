@@ -52,19 +52,20 @@ Welcome to the comprehensive user manual for **yunsftp** — the lightweight, ad
 
 ### System Requirements
 - **Hardware**: Mac with Apple Silicon (M1, M2, M3, M4, or newer).
-- **Operating System**: macOS 14.0 (Sonoma), macOS 15.0 (Sequoia), or later.
+- **Operating System**: macOS 13.0 (Ventura) or later.
 - **Architecture**: 100% Native 64-bit ARM (`arm64`). Rosetta 2 is **not** required.
 
 ### Installation
 
 #### Method A: Pre-built Binary (Recommended)
-1. Download the latest release archive (`yunsftp-v1.0.0-macos-arm64.zip`) from [GitHub Releases](https://github.com/dohyun-yun/yunsftp/releases).
+1. Download the latest release archive (`yunsftp-<version>-macos-arm64.zip`) from [GitHub Releases](https://github.com/dohyun-yun/yunsftp/releases).
 2. Unzip the file.
 3. Drag `yunsftp.app` to your `/Applications` folder.
+4. On first launch macOS blocks the unsigned app: right-click → **Open** → **Open** once, or run `xattr -d com.apple.quarantine /Applications/yunsftp.app`.
 4. Launch `yunsftp` from Spotlight, Launchpad, or Finder.
 
 #### Method B: Building from Source
-Ensure Xcode 15+ or the Swift 6 command-line tools are installed:
+Ensure Xcode 15 or later (Swift 5.9+) command-line tools are installed:
 ```bash
 git clone https://github.com/dohyun-yun/yunsftp.git
 cd yunsftp

@@ -89,7 +89,7 @@ public class ClipboardService: ObservableObject {
 
                 if srcRemote, let conn = srcConn {
                     // Download from Remote to Local with Live Monitoring
-                    let batchStart = Date()
+                    let batchStart = TransferManager.shared.beginBatch()
                     for item in itemsToPaste {
                         if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                         let cleanFileName = SFTPService.decodeLsEscapes(item.name).precomposedStringWithCanonicalMapping
@@ -144,7 +144,7 @@ public class ClipboardService: ObservableObject {
                 } else {
                     // Local to Local (Copy or Move)
                     let dir: TransferDirection = wasCut ? .localMove : .localCopy
-                    let batchStart = Date()
+                    let batchStart = TransferManager.shared.beginBatch()
                     for item in itemsToPaste {
                         if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                         let taskId = transferManager.addTransfer(
@@ -203,7 +203,7 @@ public class ClipboardService: ObservableObject {
 
                 if !srcRemote {
                     // Upload Local to Remote
-                    let batchStart = Date()
+                    let batchStart = TransferManager.shared.beginBatch()
                     for item in itemsToPaste {
                         if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                         let taskId = transferManager.addTransfer(
@@ -231,7 +231,7 @@ public class ClipboardService: ObservableObject {
                     }
                 } else if let srcConn = srcConn {
                     // Remote to Remote
-                    let batchStart = Date()
+                    let batchStart = TransferManager.shared.beginBatch()
                     for item in itemsToPaste {
                         if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                         let taskId = transferManager.addTransfer(

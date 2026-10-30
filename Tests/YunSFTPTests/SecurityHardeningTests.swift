@@ -62,9 +62,13 @@ extension SecurityHardeningTests {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/YunSFTP/Services/SFTPService.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
-        let bareCatches = source.components(separatedBy: "\n").filter { $0.trimmingCharacters(in: .whitespaces) == "} catch {" }
-        // Only runProcess' cleanup catches and download's partial-file cleanup (which rethrows) may remain unguarded.
-        XCTAssertEqual(bareCatches.count, 4, "unguarded catch blocks: \(bareCatches.count)")
+        let lines = source.components(separatedBy: "\n")
+        // An unguarded `catch` is only acceptable when it rethrows (cleanup), never as a fallback.
+        for (i, line) in lines.enumerated() where line.trimmingCharacters(in: .whitespaces) == "} catch {" {
+            let body = lines[(i + 1)..<min(i + 12, lines.count)].joined(separator: "\n")
+            XCTAssertTrue(body.contains("throw error") || body.contains("continuation.resume(throwing: error)"),
+                          "unguarded catch at line \(i + 1) does not rethrow")
+        }
     }
 }
 
@@ -184,5 +188,14 @@ extension SecurityHardeningTests {
         let cmd = ConnectionManager.sshCommand(for: conn)
         XCTAssertTrue(cmd.contains("-o 'KexAlgorithms=+diffie-hellman-group14-sha1"))
         XCTAssertTrue(cmd.hasSuffix("-- 'u@nas.local'"))
+    }
+}
+
+extension SecurityHardeningTests {
+    func testNotFoundClassificationIgnoresSessionFailures() {
+        XCTAssertTrue(SFTPService.isNotFoundText("Can't ls: \"/x/y\" not found"))
+        XCTAssertTrue(SFTPService.isNotFoundText("Couldn't stat remote file: No such file or directory"))
+        XCTAssertFalse(SFTPService.isNotFoundText("Warning: Identity file ~/.ssh/x not accessible: No such file or directory. ssh: connect to host h port 22: Connection timed out"))
+        XCTAssertFalse(SFTPService.isNotFoundText("Host key verification failed."))
     }
 }

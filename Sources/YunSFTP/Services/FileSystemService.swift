@@ -222,7 +222,8 @@ public actor FileSystemService {
         while true {
             let candidate = SFTPService.uniqueName(base, existing: taken)
             let url = directory.appendingPathComponent(candidate)
-            if FileManager.default.fileExists(atPath: url.path) {
+            // attributesOfItem does not follow symlinks, so a dangling link still counts as taken.
+            if (try? FileManager.default.attributesOfItem(atPath: url.path)) != nil {
                 taken.insert(candidate)
             } else {
                 return url

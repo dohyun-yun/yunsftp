@@ -78,9 +78,17 @@ public class TransferManager: ObservableObject {
 
     public init() {}
 
+    /// Called once before a batch loop: a cancel from an earlier batch cannot leak into it.
+    public func beginBatch() -> Date {
+        cancelRequestedAt = nil
+        ProcessRegistry.shared.clearPendingCancel()
+        return Date()
+    }
+
     public func consumeCancelRequest(since batchStart: Date) -> Bool {
         guard let at = cancelRequestedAt, at >= batchStart else { return false }
         cancelRequestedAt = nil
+        ProcessRegistry.shared.clearPendingCancel()
         return true
     }
 
@@ -89,7 +97,7 @@ public class TransferManager: ObservableObject {
         // ponytail: kills every running *transfer* child (listings/deletes are untouched). Batches
         // run one transfer at a time, so this is the cancelled one unless two batches overlap;
         // key the registry by batch token if that bites.
-        ProcessRegistry.shared.terminateAll()
+        ProcessRegistry.shared.requestCancel()
     }
 
     public var hasActiveTransfers: Bool {
@@ -104,10 +112,12 @@ public class TransferManager: ObservableObject {
     }
 
     public func addTransfer(fileName: String, direction: TransferDirection, totalBytes: Int64 = 0) -> UUID {
+        // Batches add items one at a time right before working on them, so an item is
+        // in progress from the moment it exists (the cancel button must be able to act on it).
         let item = TransferTaskItem(
             fileName: fileName,
             direction: direction,
-            state: .queued,
+            state: .inProgress,
             progress: 0.0,
             bytesTransferred: 0,
             totalBytes: totalBytes,
@@ -166,11 +176,7 @@ public class TransferManager: ObservableObject {
 
     public func cancelTransfer(id: UUID) {
         if let idx = transfers.firstIndex(where: { $0.id == id }) {
-            // The active item owns the process. Downloads stay "queued" until the first bytes land,
-            // so a queued item with nothing in progress is the active one too.
-            let isActive = transfers[idx].state == .inProgress
-                || (transfers[idx].state == .queued && !transfers.contains { $0.state == .inProgress })
-            if isActive {
+            if transfers[idx].state == .inProgress {
                 requestCancel()
             }
             transfers[idx].state = .cancelled

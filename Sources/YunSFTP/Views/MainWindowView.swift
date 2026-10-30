@@ -533,7 +533,7 @@ public struct MainWindowView: View {
             let pwd = activePane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
             let dest = otherPane.currentURL
             Task {
-                let batchStart = Date()
+                let batchStart = TransferManager.shared.beginBatch()
                 for item in selected {
                     if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                     let cleanFileName = SFTPService.decodeLsEscapes(item.name).precomposedStringWithCanonicalMapping
@@ -591,7 +591,7 @@ public struct MainWindowView: View {
             let pwd = otherPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
             let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
             Task {
-                let batchStart = Date()
+                let batchStart = TransferManager.shared.beginBatch()
                 for item in selected {
                     if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .upload, totalBytes: item.size)
@@ -622,7 +622,7 @@ public struct MainWindowView: View {
             let dstPwd = otherPane.remotePassword ?? (dstConn.authType == .password ? KeychainService.shared.loadPassword(for: dstConn) : nil)
             let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
             Task {
-                let batchStart = Date()
+                let batchStart = TransferManager.shared.beginBatch()
                 for item in selected {
                     if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .remoteCopy, totalBytes: item.size)
@@ -655,7 +655,7 @@ public struct MainWindowView: View {
         let dest = otherPane.currentURL
 
         Task {
-            let batchStart = Date()
+            let batchStart = TransferManager.shared.beginBatch()
             for item in selected {
                 if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                 let taskId = transferManager.addTransfer(fileName: item.name, direction: .localCopy, totalBytes: item.size)
@@ -714,7 +714,7 @@ public struct MainWindowView: View {
             let pwd = activePane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
             let dest = otherPane.currentURL
             Task {
-                let batchStart = Date()
+                let batchStart = TransferManager.shared.beginBatch()
                 for item in selected {
                     if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .download, totalBytes: item.size)
@@ -770,7 +770,7 @@ public struct MainWindowView: View {
             let pwd = otherPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
             let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
             Task {
-                let batchStart = Date()
+                let batchStart = TransferManager.shared.beginBatch()
                 for item in selected {
                     if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .upload, totalBytes: item.size)
@@ -803,7 +803,7 @@ public struct MainWindowView: View {
             let dstPwd = otherPane.remotePassword ?? (dstConn.authType == .password ? KeychainService.shared.loadPassword(for: dstConn) : nil)
             let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
             Task {
-                let batchStart = Date()
+                let batchStart = TransferManager.shared.beginBatch()
                 for item in selected {
                     if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .remoteCopy, totalBytes: item.size)
@@ -843,7 +843,7 @@ public struct MainWindowView: View {
         let dest = otherPane.currentURL
 
         Task {
-            let batchStart = Date()
+            let batchStart = TransferManager.shared.beginBatch()
             for item in selected {
                 if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                 let taskId = transferManager.addTransfer(fileName: item.name, direction: .localMove, totalBytes: item.size)
@@ -892,7 +892,7 @@ public struct MainWindowView: View {
             let pwd = targetPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
             Task {
                 var hadError = false
-                let batchStart = Date()
+                let batchStart = TransferManager.shared.beginBatch()
                 for item in targets {
                     if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                     let remotePath = SFTPService.normalizeRemotePath(item.url.path)

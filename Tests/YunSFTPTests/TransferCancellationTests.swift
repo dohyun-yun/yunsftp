@@ -85,23 +85,50 @@ final class TransferCancellationTests: XCTestCase {
     }
 
     @MainActor
-    func testCancellingActiveButStillPreparingDownloadStopsTheBatch() {
+    func testCancellingJustAddedItemStopsTheBatch() {
         let tm = TransferManager()
-        let id = tm.addTransfer(fileName: "big.iso", direction: .download, totalBytes: 100) // stays .queued until bytes land
+        let batchStart = tm.beginBatch()
+        let id = tm.addTransfer(fileName: "big.iso", direction: .download, totalBytes: 100) // no bytes landed yet
         tm.cancelTransfer(id: id)
-        XCTAssertTrue(tm.consumeCancelRequest(since: .distantPast))
+        XCTAssertTrue(tm.consumeCancelRequest(since: batchStart))
     }
 
     @MainActor
-    func testCancellingQueuedTransferDoesNotStopTheBatch() {
+    func testBeginBatchClearsStaleCancel() {
         let tm = TransferManager()
-        let running = tm.addTransfer(fileName: "a", direction: .upload, totalBytes: 1)
-        tm.updateProgress(id: running, progress: 0.5, bytesTransferred: 1, totalBytes: 2, message: "")
-        let queued = tm.addTransfer(fileName: "b", direction: .upload, totalBytes: 1)
-        tm.cancelTransfer(id: queued)
-        XCTAssertEqual(tm.transfers.last?.state, .cancelled)
-        XCTAssertEqual(tm.transfers.first?.state, .inProgress)
-        XCTAssertFalse(tm.consumeCancelRequest(since: .distantPast))
+        let id = tm.addTransfer(fileName: "a", direction: .upload, totalBytes: 1)
+        tm.cancelTransfer(id: id)
+        let next = tm.beginBatch()
+        XCTAssertFalse(tm.consumeCancelRequest(since: next))
+        XCTAssertFalse(ProcessRegistry.shared.consumePendingCancel(), "beginBatch clears the pending process cancel too")
+    }
+
+    func testPendingCancelAbortsTheNextTransferProcessOnly() async throws {
+        let registry = ProcessRegistry()
+        XCTAssertFalse(registry.consumePendingCancel())
+        registry.requestCancel()               // nothing running: the cancel stays pending
+        XCTAssertTrue(registry.consumePendingCancel())
+        XCTAssertFalse(registry.consumePendingCancel(), "consumed once")
+
+        // Delivered to a running transfer -> cleared, not pending any more
+        let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/sleep"); p.arguments = ["30"]
+        registry.register(p, isTransfer: true); try p.run()
+        registry.requestCancel()
+        p.waitUntilExit()
+        XCTAssertTrue(registry.consumeTerminated(p))
+        XCTAssertFalse(registry.consumePendingCancel())
+    }
+
+    func testTransferProcessStartedAfterCancelIsAborted() async throws {
+        ProcessRegistry.shared.requestCancel()
+        do {
+            _ = try await SFTPService.shared.runProcess(executable: "/usr/bin/true", arguments: [], password: nil, isTransfer: true)
+            XCTFail("transfer process must not start while a cancel is pending")
+        } catch {
+            XCTAssertTrue(SFTPService.isCancellation(error))
+        }
+        // non-transfer processes are unaffected by a (now consumed) cancel
+        _ = try await SFTPService.shared.runProcess(executable: "/usr/bin/true", arguments: [], password: nil)
     }
 
     func testCancelledDownloadLeavesNoPartialFile() async throws {

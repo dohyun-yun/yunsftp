@@ -69,10 +69,34 @@ public final class ProcessRegistry: @unchecked Sendable {
     func register(_ p: Process, isTransfer: Bool) { lock.lock(); processes[ObjectIdentifier(p)] = (p, isTransfer); lock.unlock() }
     func unregister(_ p: Process) { lock.lock(); processes.removeValue(forKey: ObjectIdentifier(p)); lock.unlock() }
 
-    /// True once per process if `terminateAll()` signalled it.
+    /// True once per process if `terminateAll()` signalled it. Delivering the cancel to a running
+    /// transfer also clears the pending flag, so it cannot leak into a later transfer.
     func consumeTerminated(_ p: Process) -> Bool {
         lock.lock(); defer { lock.unlock() }
-        return terminated.remove(ObjectIdentifier(p)) != nil
+        let hit = terminated.remove(ObjectIdentifier(p)) != nil
+        if hit { pendingCancelAt = nil }
+        return hit
+    }
+
+    /// Set by `requestCancel()`. A transfer process that starts while it is pending (the cancel
+    /// arrived during name probing / askpass setup) aborts before it runs.
+    private var pendingCancelAt: Date?
+    private let pendingCancelTTL: TimeInterval = 15
+
+    public func requestCancel() {
+        lock.lock(); pendingCancelAt = Date(); lock.unlock()
+        terminateAll()
+    }
+
+    public func clearPendingCancel() { lock.lock(); pendingCancelAt = nil; lock.unlock() }
+
+    func consumePendingCancel() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard let at = pendingCancelAt else { return false }
+        pendingCancelAt = nil
+        // ponytail: TTL guards against a cancel nobody consumed (single download, last batch item);
+        // per-batch tokens would make this exact.
+        return Date().timeIntervalSince(at) < pendingCancelTTL
     }
 
     /// Sends SIGTERM to every running transfer child. Returns how many were signalled.
@@ -264,7 +288,7 @@ public actor SFTPService {
             if !items.isEmpty || sftpOutput.contains("total") || sftpOutput.contains("drwx") || sftpOutput.contains("-rw") || sftpOutput.contains("sftp>") {
                 return items
             }
-        } catch where !Self.isAuthenticationFailure(error) {
+        } catch where !Self.isFatal(error) {
             // If cd failed in SFTP, try direct 'ls -la "path"' via SFTP batch
             do {
                 let fallbackOutput = try await executeSFTPBatch(commands: ["ls -la \(Self.sftpQuote(targetPath))"], connection: connection, password: password)
@@ -272,7 +296,7 @@ public actor SFTPService {
                 if !items.isEmpty || fallbackOutput.contains("total") || fallbackOutput.contains("drwx") || fallbackOutput.contains("-rw") || fallbackOutput.contains("sftp>") {
                     return items
                 }
-            } catch where !Self.isAuthenticationFailure(error) {
+            } catch where !Self.isFatal(error) {
                 if connection.host == "local-sftp-server" {
                     throw error
                 }
@@ -322,11 +346,11 @@ public actor SFTPService {
         ]
         for commands in batchAttempts {
             do {
-                _ = try await executeSFTPBatch(commands: commands, connection: connection, password: effectivePwd)
+                _ = try await executeSFTPBatch(commands: commands, connection: connection, password: effectivePwd, isTransfer: true)
                 if FileManager.default.fileExists(atPath: localDestURL.path) {
                     return localDestURL
                 }
-            } catch where !Self.isAuthenticationFailure(error) && !Self.isCancellation(error) {
+            } catch where !Self.isFatal(error) {
                 discardPartial()
             } catch {
                 discardPartial()
@@ -383,16 +407,16 @@ public actor SFTPService {
             "put -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(remoteName))"
         ]
         do {
-            _ = try await executeSFTPBatch(commands: sftpCommands, connection: connection, password: effectivePwd)
-        } catch where !Self.isAuthenticationFailure(error) {
+            _ = try await executeSFTPBatch(commands: sftpCommands, connection: connection, password: effectivePwd, isTransfer: true)
+        } catch where !Self.isFatal(error) {
             // 2. Direct put with remote path
             let directCmds = [
                 "lcd \(Self.sftpQuote(localParentDir))",
                 "put -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(remoteDest))"
             ]
             do {
-                _ = try await executeSFTPBatch(commands: directCmds, connection: connection, password: effectivePwd)
-            } catch where !Self.isAuthenticationFailure(error) {
+                _ = try await executeSFTPBatch(commands: directCmds, connection: connection, password: effectivePwd, isTransfer: true)
+            } catch where !Self.isFatal(error) {
                 // 3. Fallback to scp (quoting remoteDest for remote shell execution)
                 var args = ["-P", "\(connection.port)"]
                 args.append(contentsOf: Self.sshOptions(for: connection))
@@ -451,11 +475,11 @@ public actor SFTPService {
         do {
             _ = try await executeSFTPBatch(commands: cmds, connection: connection, password: effectivePwd)
             return
-        } catch where !Self.isAuthenticationFailure(error) {
+        } catch where !Self.isFatal(error) {
             do {
                 _ = try await executeSFTPBatch(commands: ["mkdir \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
                 return
-            } catch where !Self.isAuthenticationFailure(error) {
+            } catch where !Self.isFatal(error) {
                 if connection.host == "local-sftp-server" {
                     throw error
                 }
@@ -481,7 +505,7 @@ public actor SFTPService {
             do {
                 _ = try await executeSFTPBatch(commands: cdRmCmds, connection: connection, password: effectivePwd)
                 return
-            } catch where !Self.isAuthenticationFailure(error) {
+            } catch where !Self.isFatal(error) {
                 _ = try await executeSFTPBatch(commands: ["rm \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
                 return
             }
@@ -493,7 +517,7 @@ public actor SFTPService {
             do {
                 _ = try await executeSFTPBatch(commands: cdRmdirCmds, connection: connection, password: effectivePwd)
                 return
-            } catch where !Self.isAuthenticationFailure(error) {
+            } catch where !Self.isFatal(error) {
                 // Deletion stays inside the SFTP subsystem on purpose: no recursive shell removal.
                 try await removeDirectoryRecursivelySFTP(remotePath: nfc, connection: connection, password: effectivePwd)
             }
@@ -520,7 +544,7 @@ public actor SFTPService {
             }
             do {
                 _ = try await executeSFTPBatch(commands: batchCmds, connection: connection, password: password)
-            } catch where !Self.isAuthenticationFailure(error) {
+            } catch where !Self.isFatal(error) {
                 // Fallback to individual removal if batch had a hiccup
                 for f in files {
                     try await remove(remotePath: f.remotePath, isDirectory: false, connection: connection, password: password)
@@ -538,7 +562,7 @@ public actor SFTPService {
         ]
         do {
             _ = try await executeSFTPBatch(commands: cmds, connection: connection, password: password)
-        } catch where !Self.isAuthenticationFailure(error) {
+        } catch where !Self.isFatal(error) {
             _ = try await executeSFTPBatch(commands: ["rmdir \(Self.sftpQuote(nfc))"], connection: connection, password: password)
         }
     }
@@ -563,7 +587,7 @@ public actor SFTPService {
             do {
                 _ = try await executeSFTPBatch(commands: cmds, connection: connection, password: effectivePwd)
                 return
-            } catch where !Self.isAuthenticationFailure(error) {
+            } catch where !Self.isFatal(error) {
                 // Fallback to full path rename below
             }
         }
@@ -571,7 +595,7 @@ public actor SFTPService {
         do {
             _ = try await executeSFTPBatch(commands: ["rename \(Self.sftpQuote(nfcSrc)) \(Self.sftpQuote(nfcDst))"], connection: connection, password: effectivePwd)
             return
-        } catch where !Self.isAuthenticationFailure(error) {
+        } catch where !Self.isFatal(error) {
             if connection.host == "local-sftp-server" {
                 throw error
             }
@@ -595,11 +619,11 @@ public actor SFTPService {
             do {
                 _ = try await executeSFTPBatch(commands: cmds, connection: connection, password: effectivePwd)
                 return
-            } catch where !Self.isAuthenticationFailure(error) {
+            } catch where !Self.isFatal(error) {
                 do {
                     _ = try await executeSFTPBatch(commands: ["chmod \(mode) \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
                     return
-                } catch where !Self.isAuthenticationFailure(error) {
+                } catch where !Self.isFatal(error) {
                     if connection.host == "local-sftp-server" {
                         throw error
                     }
@@ -616,7 +640,7 @@ public actor SFTPService {
         let cmd = "test -e \(Self.posixShellEscape(nfc)) && chmod \(recFlag)\(mode) \(Self.posixShellEscape(nfc))"
         do {
             _ = try await executeSSH(command: cmd, connection: connection, password: effectivePwd)
-        } catch where !Self.isAuthenticationFailure(error) {
+        } catch where !Self.isFatal(error) {
             _ = try await executeSFTPBatch(commands: ["chmod \(mode) \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
         }
     }
@@ -673,7 +697,7 @@ public actor SFTPService {
         return try await runProcess(executable: "/usr/bin/ssh", arguments: args, password: effectivePwd)
     }
 
-    private func executeSFTPBatch(commands: [String], connection: RemoteConnection, password: String?) async throws -> String {
+    private func executeSFTPBatch(commands: [String], connection: RemoteConnection, password: String?, isTransfer: Bool = false) async throws -> String {
         let effectivePwd = resolvePassword(password: password, connection: connection)
         var args: [String] = []
         if connection.host == "local-sftp-server" {
@@ -694,7 +718,6 @@ public actor SFTPService {
         }
 
         let inputString = commands.joined(separator: "\n") + "\nexit\n"
-        let isTransfer = commands.contains { $0.hasPrefix("get ") || $0.hasPrefix("put ") }
         return try await runProcess(executable: "/usr/bin/sftp", arguments: args, inputData: inputString.data(using: .utf8), password: effectivePwd, isTransfer: isTransfer)
     }
 
@@ -710,8 +733,13 @@ public actor SFTPService {
             throw NSError(domain: "SFTPService", code: 3, userInfo: [NSLocalizedDescriptionKey: "Could not create the password helper"])
         }
         let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
-        try handle.write(contentsOf: Data(script.utf8))
-        try handle.close()
+        do {
+            try handle.write(contentsOf: Data(script.utf8))
+            try handle.close()
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            throw error
+        }
         return url
     }
 
@@ -771,6 +799,9 @@ public actor SFTPService {
                     }
                 }
                 do {
+                    if isTransfer && ProcessRegistry.shared.consumePendingCancel() {
+                        throw NSError(domain: "SFTPService", code: Self.cancellationCode, userInfo: [NSLocalizedDescriptionKey: "Transfer cancelled."])
+                    }
                     ProcessRegistry.shared.register(process, isTransfer: isTransfer)
                     try process.run()
                     if let input = inputData {
@@ -806,9 +837,10 @@ public actor SFTPService {
                 ])
             }
             if process.terminationReason == .uncaughtSignal {
-                let detail = String(decoding: errData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-                throw NSError(domain: "SFTPService", code: Int(process.terminationStatus), userInfo: [
-                    NSLocalizedDescriptionKey: "\((executable as NSString).lastPathComponent) was terminated by signal \(process.terminationStatus)." + (detail.isEmpty ? "" : " \(detail)")
+                let detail = errorMsg.trimmingCharacters(in: .whitespacesAndNewlines)
+                throw NSError(domain: "SFTPService", code: Self.signalTerminationCode, userInfo: [
+                    NSLocalizedDescriptionKey: "\((executable as NSString).lastPathComponent) was terminated by signal \(process.terminationStatus)." + (detail.isEmpty ? "" : " \(detail)"),
+                    "signal": Int(process.terminationStatus)
                 ])
             }
 
@@ -855,10 +887,30 @@ public actor SFTPService {
         return ns.domain == "SFTPService" && ns.code == notFoundCode
     }
 
-    static func isNotFoundText(_ rawError: String) -> Bool {
+    static func isConnectionErrorText(_ rawError: String) -> Bool {
         let lower = rawError.lowercased()
-        return lower.contains("no such file or directory") || lower.contains("couldn't stat") || lower.contains("not found")
+        return ["connection reset", "connection refused", "timed out", "timeout", "no route to host", "host is down",
+                "host key verification failed", "remote host identification has changed", "no matching"]
+            .contains { lower.contains($0) }
     }
+
+    /// Only sftp's own "path missing" messages count, and never when the session itself failed
+    /// (ssh also says "No such file or directory" about a missing identity file).
+    static func isNotFoundText(_ rawError: String) -> Bool {
+        guard !isConnectionErrorText(rawError) else { return false }
+        let lower = rawError.lowercased()
+        return lower.contains("can't ls:") || lower.contains("couldn't stat") || lower.contains("can't change directory")
+            || lower.contains("not found") || lower.contains("no such file or directory")
+    }
+
+    /// Errors that must never trigger a transport fallback: a rejected login (every retry is
+    /// another failed login) and a user cancel (a retry would silently finish the transfer).
+    static func isFatal(_ error: Error) -> Bool {
+        return isAuthenticationFailure(error) || isCancellation(error)
+    }
+
+    /// Error code used when ssh/sftp died from a signal nobody in the app sent.
+    static let signalTerminationCode = -1004
 
     static func isAuthenticationFailure(_ error: Error) -> Bool {
         let ns = error as NSError

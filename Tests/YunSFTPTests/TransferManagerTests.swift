@@ -32,7 +32,7 @@ final class TransferManagerTests: XCTestCase {
         XCTAssertEqual(first.id, taskId)
         XCTAssertEqual(first.fileName, "test_video.mp4")
         XCTAssertEqual(first.direction, .download)
-        XCTAssertEqual(first.state, .queued)
+        XCTAssertEqual(first.state, .inProgress)
         XCTAssertEqual(first.progress, 0.0)
     }
 

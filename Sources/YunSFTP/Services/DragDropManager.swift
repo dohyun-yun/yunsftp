@@ -133,7 +133,7 @@ public class DragDropManager: ObservableObject {
 
                 if sourceIsRemote, let conn = sourceConn {
                     // SFTP Download with Live Monitoring
-                    let batchStart = Date()
+                    let batchStart = TransferManager.shared.beginBatch()
                     for item in items {
                         if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                         let cleanFileName = SFTPService.decodeLsEscapes(item.name).precomposedStringWithCanonicalMapping
@@ -185,7 +185,7 @@ public class DragDropManager: ObservableObject {
                     }
                 } else {
                     // Local to Local Copy with Live Monitoring
-                    let batchStart = Date()
+                    let batchStart = TransferManager.shared.beginBatch()
                     for item in items {
                         if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                         let taskId = transferManager.addTransfer(
@@ -248,7 +248,7 @@ public class DragDropManager: ObservableObject {
 
                 if !sourceIsRemote {
                     // Upload Local to Remote
-                    let batchStart = Date()
+                    let batchStart = TransferManager.shared.beginBatch()
                     for item in items {
                         if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                         let taskId = transferManager.addTransfer(
@@ -273,7 +273,7 @@ public class DragDropManager: ObservableObject {
                     }
                 } else if let srcConn = sourceConn {
                     // Remote to Remote Transfer
-                    let batchStart = Date()
+                    let batchStart = TransferManager.shared.beginBatch()
                     for item in items {
                         if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                         let taskId = transferManager.addTransfer(

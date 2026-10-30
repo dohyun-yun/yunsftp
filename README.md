@@ -53,7 +53,7 @@ Upgrade later with `brew upgrade --cask yunsftp`.
 **Manual download**
 
 1. **Download** the `.dmg` from the [latest release](https://github.com/dohyun-yun/yunsftp/releases/latest) and drag `yunsftp.app` to `/Applications`.
-2. **First launch:** releases are not notarized yet, so macOS blocks the first open. Right-click `yunsftp.app` → **Open** → **Open** once, or run:
+2. **First launch:** releases are ad-hoc signed (not notarized), so macOS blocks the first open. Right-click `yunsftp.app` → **Open** → **Open** once, or run:
    ```bash
    xattr -d com.apple.quarantine /Applications/yunsftp.app
    ```
@@ -134,7 +134,7 @@ Only to your servers. The optional update check requests `api.github.com/repos/d
 
 ## Roadmap
 
-Progress is tracked in [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md). Next up: a native SFTP engine for true byte-level progress and resume, signed/notarized releases with a Homebrew cask, and a SwiftUI `Table`-based file list.
+Progress is tracked in [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md). Next up: a native SFTP engine for true byte-level progress and resume, and a SwiftUI `Table`-based file list. Notarized builds are not planned for now; the Homebrew cask and the first-launch note above cover installation.
 
 ## Build from source
 

@@ -7,7 +7,7 @@ if [ -z "$1" ]; then
 fi
 
 INPUT_IMAGE="$1"
-OUTPUT_ICNS="${2:-Resources/forklift.icns}"
+OUTPUT_ICNS="${2:-Resources/yunsftp.icns}"
 
 if [ ! -f "$INPUT_IMAGE" ]; then
     echo "Error: Input image $INPUT_IMAGE not found!"

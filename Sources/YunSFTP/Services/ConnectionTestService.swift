@@ -53,7 +53,7 @@ public actor ConnectionTestService {
         }
 
         let connection = NWConnection(host: hostEndpoint, port: portEndpoint, using: .tcp)
-        let queue = DispatchQueue(label: "com.forklift.connection-test")
+        let queue = DispatchQueue(label: "com.finsternis.yunsftp.connection-test")
 
         return await withCheckedContinuation { continuation in
             let resumedFlag = AtomicFlag()

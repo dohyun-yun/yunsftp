@@ -15,9 +15,7 @@ public class ConnectionManager: ObservableObject {
     @Published public var testResults: [UUID: ConnectionTestResult] = [:]
 
     private let storageKey = "yunsftp_SavedConnections"
-    private let legacyStorageKey = "ForkLiftSilicon_SavedConnections"
     private let migrationDoneKey = "yunsftp_MigrationDone"
-    private let legacyMigrationDoneKey = "ForkLiftSilicon_MigrationDone"
 
     public init() {
         loadConnections()
@@ -28,13 +26,6 @@ public class ConnectionManager: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: storageKey),
            let list = try? JSONDecoder().decode([RemoteConnection].self, from: data) {
             self.connections = list
-            return
-        }
-        if let data = UserDefaults.standard.data(forKey: legacyStorageKey),
-           let list = try? JSONDecoder().decode([RemoteConnection].self, from: data) {
-            self.connections = list
-            saveConnections()
-            return
         }
     }
 
@@ -45,7 +36,7 @@ public class ConnectionManager: ObservableObject {
     }
 
     public func checkAndPerformAutoMigration() {
-        let migrationDone = UserDefaults.standard.bool(forKey: migrationDoneKey) || UserDefaults.standard.bool(forKey: legacyMigrationDoneKey)
+        let migrationDone = UserDefaults.standard.bool(forKey: migrationDoneKey)
         if !migrationDone && connections.isEmpty {
             let result = MigrationService.shared.migrateFromForkLift2()
             if !result.importedConnections.isEmpty {

@@ -304,14 +304,14 @@ public enum ConflictAlert {
     public static func present(fileName: String, destination: String) async -> ConflictDecision {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "\"\(fileName)\" already exists in \(destination)"
-        alert.informativeText = "Replace it, keep both files, or skip this item?"
-        alert.addButton(withTitle: "Replace")
-        alert.addButton(withTitle: "Keep Both")
-        alert.addButton(withTitle: "Skip")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L("\"%@\" already exists in %@", fileName, destination)
+        alert.informativeText = L("Replace it, keep both files, or skip this item?")
+        alert.addButton(withTitle: L("Replace"))
+        alert.addButton(withTitle: L("Keep Both"))
+        alert.addButton(withTitle: L("Skip"))
+        alert.addButton(withTitle: L("Cancel"))
         alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = "Apply to all remaining items"
+        alert.suppressionButton?.title = L("Apply to all remaining items")
         let response = alert.runModal()
         let applyToAll = alert.suppressionButton?.state == .on
         switch response {

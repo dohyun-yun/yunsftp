@@ -7,10 +7,10 @@ public struct TransferStatusBarView: View {
     public init() {}
 
     private var showAllButton: some View {
-        Button("Show All") { openWindow(id: "transfers") }
+        Button(L("Show All")) { openWindow(id: "transfers") }
             .controlSize(.small)
             .buttonStyle(.bordered)
-            .help("Open the Transfers window (Cmd+Shift+T)")
+            .help(L("Open the Transfers window (Cmd+Shift+T)"))
     }
 
     public var body: some View {
@@ -36,7 +36,7 @@ public struct TransferStatusBarView: View {
                         Spacer()
 
                         showAllButton
-                        Button("Dismiss") {
+                        Button(L("Dismiss")) {
                             transferManager.clearCompleted()
                         }
                         .controlSize(.small)
@@ -92,7 +92,7 @@ public struct TransferStatusBarView: View {
 
                         Spacer()
 
-                        Button("Dismiss") {
+                        Button(L("Dismiss")) {
                             transferManager.clearCompleted()
                         }
                         .controlSize(.small)
@@ -160,7 +160,7 @@ public struct TransferStatusBarView: View {
                                 .foregroundColor(.secondary)
                         }
                         .buttonStyle(.plain)
-                        .help("Cancel Transfer")
+                        .help(L("Cancel Transfer"))
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)

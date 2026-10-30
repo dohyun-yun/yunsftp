@@ -46,12 +46,12 @@ public struct FilePaneView: View {
                         .foregroundColor(pane.shouldShowFilter ? .accentColor : .secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Filter this folder (Cmd+F)")
-                .accessibilityLabel("Filter")
+                .help(L("Filter this folder (Cmd+F)"))
+                .accessibilityLabel(L("Filter"))
 
                 if pane.shouldShowFilter {
                     HStack(spacing: 4) {
-                        TextField("Filter...", text: $pane.searchQuery)
+                        TextField(L("Filter..."), text: $pane.searchQuery)
                             .textFieldStyle(.plain)
                             .font(.subheadline)
                             .focused($isFilterFocused)
@@ -96,7 +96,7 @@ public struct FilePaneView: View {
                         .foregroundColor(pane.showHiddenFiles ? .accentColor : .secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Toggle Hidden Files (Cmd+Shift+.)")
+                .help(L("Toggle Hidden Files (Cmd+Shift+.)"))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -248,7 +248,7 @@ public struct WelcomeBanner: View {
                 .font(.title3)
                 .foregroundColor(.accentColor)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Add your first server")
+                Text(L("Add your first server"))
                     .font(.subheadline.weight(.semibold))
                 Text("Press ⌘K to add a connection\(hasSSHConfig ? ", or import the hosts from ~/.ssh/config." : ".") Drag files between the two panes or press F5 to copy.")
                     .font(.caption)
@@ -256,17 +256,17 @@ public struct WelcomeBanner: View {
             }
             Spacer()
             if hasSSHConfig {
-                Button("Import from ssh config", action: onImport)
+                Button(L("Import from ssh config"), action: onImport)
                     .controlSize(.small)
             }
-            Button("Connect…", action: onConnect)
+            Button(L("Connect…"), action: onConnect)
                 .controlSize(.small)
                 .buttonStyle(.borderedProminent)
             Button(action: onDismiss) {
                 Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Dismiss")
+            .accessibilityLabel(L("Dismiss"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -302,7 +302,7 @@ public struct RemoteConnectingView: View {
                         .foregroundColor(.secondary)
                 }
 
-                Text("Initializing SFTP session and fetching the file list...")
+                Text(L("Initializing SFTP session and fetching the file list..."))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -314,7 +314,7 @@ public struct RemoteConnectingView: View {
             Button(action: onCancel) {
                 HStack(spacing: 4) {
                     Image(systemName: "xmark.circle")
-                    Text("Cancel Connection")
+                    Text(L("Cancel Connection"))
                 }
                 .font(.callout)
             }
@@ -352,14 +352,14 @@ public struct RemoteErrorView: View {
             }
 
             HStack(spacing: 10) {
-                Button("Retry") {
+                Button(L("Retry")) {
                     pane.reload()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
 
                 if pane.isRemote {
-                    Button("Back to Local") {
+                    Button(L("Back to Local")) {
                         pane.disconnectRemote()
                     }
                     .buttonStyle(.bordered)

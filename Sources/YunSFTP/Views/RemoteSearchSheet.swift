@@ -22,15 +22,15 @@ public struct RemoteSearchSheet: View {
         VStack(spacing: 12) {
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Name contains…", text: $query)
+                TextField(L("Name contains…"), text: $query)
                     .textFieldStyle(.plain)
                     .focused($fieldFocused)
                     .onSubmit { search() }
                 if isSearching {
                     ProgressView().controlSize(.small)
-                    Button("Stop") { task?.cancel() }.controlSize(.small)
+                    Button(L("Stop")) { task?.cancel() }.controlSize(.small)
                 } else {
-                    Button("Search") { search() }.controlSize(.small).disabled(query.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button(L("Search")) { search() }.controlSize(.small).disabled(query.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
             .padding(8)
@@ -64,7 +64,7 @@ public struct RemoteSearchSheet: View {
                     }
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) { onReveal(item); dismiss() }
-                    .contextMenu { Button("Reveal in Pane") { onReveal(item); dismiss() } }
+                    .contextMenu { Button(L("Reveal in Pane")) { onReveal(item); dismiss() } }
                 }
                 .listStyle(.inset)
             }
@@ -73,7 +73,7 @@ public struct RemoteSearchSheet: View {
                 Text(results.isEmpty ? "" : "\(results.count) result\(results.count == 1 ? "" : "s")")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button("Close") { task?.cancel(); dismiss() }.keyboardShortcut(.cancelAction)
+                Button(L("Close")) { task?.cancel(); dismiss() }.keyboardShortcut(.cancelAction)
             }
         }
         .padding(16)

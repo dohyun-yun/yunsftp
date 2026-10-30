@@ -194,7 +194,7 @@ public struct FileListView: View {
                             if pane.isLoading {
                                 ProgressView()
                                     .scaleEffect(1.2)
-                                Text("Loading...")
+                                Text(L("Loading..."))
                                     .font(.title3)
                                     .foregroundColor(.secondary)
                             } else if let error = pane.errorMessage {
@@ -207,12 +207,12 @@ public struct FileListView: View {
                                     .multilineTextAlignment(.center)
                                     .padding(.horizontal, 24)
                                 if pane.isRemote {
-                                    Button("Disconnect") {
+                                    Button(L("Disconnect")) {
                                         pane.disconnectRemote()
                                     }
                                     .buttonStyle(.bordered)
                                 } else {
-                                    Button("Reload") {
+                                    Button(L("Reload")) {
                                         pane.reload()
                                     }
                                     .buttonStyle(.bordered)
@@ -221,7 +221,7 @@ public struct FileListView: View {
                                 Image(systemName: "folder")
                                     .font(.system(size: 40))
                                     .foregroundColor(.secondary.opacity(0.4))
-                                Text("Folder is Empty")
+                                Text(L("Folder is Empty"))
                                     .font(.title3)
                                     .foregroundColor(.secondary)
                                 Text(pane.isRemote ? "Drop files here to upload, or press ⌘⇧N for a new folder." : "Drop files here, or press ⌘⇧N for a new folder.")
@@ -367,7 +367,7 @@ public struct FileListView: View {
 
     @ViewBuilder
     private func contextMenuFor(item: FileItem) -> some View {
-        Button("Open (Cmd+O)") {
+        Button(L("Open (Cmd+O)")) {
             onActivate()
             if item.isDirectory {
                 pane.navigateTo(item.url)
@@ -377,7 +377,7 @@ public struct FileListView: View {
         }
 
         if pane.isRemote && !item.isDirectory, let conn = pane.remoteConnection {
-            Button("Edit in External Editor") {
+            Button(L("Edit in External Editor")) {
                 onActivate()
                 let pwd = pane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
                 Task {
@@ -390,18 +390,18 @@ public struct FileListView: View {
             }
         }
 
-        Button("Toggle Selection (Space)") {
+        Button(L("Toggle Selection (Space)")) {
             onActivate()
             pane.focusedItemURL = item.url
             pane.toggleSelectionAtFocus()
         }
 
-        Button("Quick Look (Cmd+Y)") {
+        Button(L("Quick Look (Cmd+Y)")) {
             onActivate()
             onQuickLook(item)
         }
 
-        Button("Get Info (Cmd+I)") {
+        Button(L("Get Info (Cmd+I)")) {
             onActivate()
             onShowInfo(item)
         }
@@ -409,19 +409,19 @@ public struct FileListView: View {
         Divider()
 
         // Clipboard Copy / Cut / Paste
-        Button("Copy (Cmd+C)") {
+        Button(L("Copy (Cmd+C)")) {
             onActivate()
             let itemsToCopy = pane.selectedItemURLs.contains(item.url) ? pane.selectedItems : [item]
             ClipboardService.shared.copy(items: itemsToCopy, from: pane)
         }
 
-        Button("Cut (Cmd+X)") {
+        Button(L("Cut (Cmd+X)")) {
             onActivate()
             let itemsToCut = pane.selectedItemURLs.contains(item.url) ? pane.selectedItems : [item]
             ClipboardService.shared.cut(items: itemsToCut, from: pane)
         }
 
-        Button("Paste (Cmd+V)") {
+        Button(L("Paste (Cmd+V)")) {
             onActivate()
             ClipboardService.shared.paste(to: pane) {
                 pane.reload()
@@ -431,7 +431,7 @@ public struct FileListView: View {
 
         Divider()
 
-        Button("Copy to Other Pane (F5)") {
+        Button(L("Copy to Other Pane (F5)")) {
             onActivate()
             if !pane.selectedItemURLs.contains(item.url) {
                 pane.selectSingle(item.url)
@@ -439,7 +439,7 @@ public struct FileListView: View {
             onCopyToOtherPane()
         }
 
-        Button("Move to Other Pane (F6)") {
+        Button(L("Move to Other Pane (F6)")) {
             onActivate()
             if !pane.selectedItemURLs.contains(item.url) {
                 pane.selectSingle(item.url)
@@ -449,17 +449,17 @@ public struct FileListView: View {
 
         Divider()
 
-        Button("Permissions (chmod)...") {
+        Button(L("Permissions (chmod)...")) {
             onActivate()
             onChmod(item)
         }
 
-        Button("Rename (Enter)") {
+        Button(L("Rename (Enter)")) {
             onActivate()
             onRename(item)
         }
 
-        Button("Duplicate (Cmd+D)") {
+        Button(L("Duplicate (Cmd+D)")) {
             onActivate()
             if pane.isRemote, let conn = pane.remoteConnection {
                 let pwd = pane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
@@ -494,12 +494,12 @@ public struct FileListView: View {
 
         if !pane.isRemote {
             if item.fileExtension == "zip" {
-                Button("Extract Archive") {
+                Button(L("Extract Archive")) {
                     onActivate()
                     onExtractArchive(item)
                 }
             } else {
-                Button("Compress to Zip") {
+                Button(L("Compress to Zip")) {
                     onActivate()
                     onCompressItems([item])
                 }
@@ -508,23 +508,23 @@ public struct FileListView: View {
 
         Divider()
 
-        Button("Refresh (Cmd+R)") {
+        Button(L("Refresh (Cmd+R)")) {
             pane.reload()
         }
 
         if !pane.isRemote {
-            Button("Open in Terminal") {
+            Button(L("Open in Terminal")) {
                 TerminalService.openInTerminal(at: item.isDirectory ? item.url : pane.currentURL)
             }
 
-            Button("Reveal in Finder") {
+            Button(L("Reveal in Finder")) {
                 TerminalService.revealInFinder(url: item.url)
             }
         }
 
         Divider()
 
-        Button("Delete / Move to Trash (Cmd+Backspace)", role: .destructive) {
+        Button(L("Delete / Move to Trash (Cmd+Backspace)"), role: .destructive) {
             onActivate()
             let targets = pane.selectedItemURLs.contains(item.url) ? pane.selectedItems : [item]
             onTrashItems(targets)

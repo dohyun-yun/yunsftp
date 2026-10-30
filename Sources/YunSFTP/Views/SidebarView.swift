@@ -17,7 +17,7 @@ public struct SidebarView: View {
     public var body: some View {
         List {
             // Favorites
-            Section(header: Text("Favorites").font(.subheadline.weight(.semibold))) {
+            Section(header: Text(L("Favorites")).font(.subheadline.weight(.semibold))) {
                 ForEach(FavoriteLocation.defaultFavorites) { fav in
                     SidebarItemRow(name: fav.name, iconName: fav.systemIconName) {
                         onSelectLocation(fav.url)
@@ -29,7 +29,7 @@ public struct SidebarView: View {
                         onSelectLocation(fav.url)
                     }
                     .contextMenu {
-                        Button("Remove from Favorites") {
+                        Button(L("Remove from Favorites")) {
                             customFavorites.removeAll { $0.id == fav.id }
                         }
                     }
@@ -39,7 +39,7 @@ public struct SidebarView: View {
             // Remote Connections (SSH / SFTP / FTP)
             Section(
                 header: HStack {
-                    Text("Connections").font(.subheadline.weight(.semibold))
+                    Text(L("Connections")).font(.subheadline.weight(.semibold))
                     Spacer()
                     Button(action: onManageConnections) {
                         Image(systemName: "slider.horizontal.3")
@@ -47,7 +47,7 @@ public struct SidebarView: View {
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("Manage Connections (Cmd+K)")
+                    .help(L("Manage Connections (Cmd+K)"))
                 }
             ) {
                 if connectionManager.connections.isEmpty {
@@ -57,7 +57,7 @@ public struct SidebarView: View {
                                 Image(systemName: "square.and.arrow.down")
                                     .font(.callout)
                                     .foregroundColor(.secondary)
-                                Text("Import from ~/.ssh/config")
+                                Text(L("Import from ~/.ssh/config"))
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
@@ -70,7 +70,7 @@ public struct SidebarView: View {
                             Image(systemName: "plus.circle")
                                 .font(.callout)
                                 .foregroundColor(.secondary)
-                            Text("Add Connection...")
+                            Text(L("Add Connection..."))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -103,8 +103,8 @@ public struct SidebarView: View {
                                         Circle()
                                             .fill(Color.green)
                                             .frame(width: 7, height: 7)
-                                            .accessibilityLabel("Connected")
-                                            .help("Connected")
+                                            .accessibilityLabel(L("Connected"))
+                                            .help(L("Connected"))
                                     } else if conn.isImportedFromForkLift2 {
                                         Image(systemName: "arrow.triangle.merge")
                                             .font(.system(size: 8))
@@ -123,7 +123,7 @@ public struct SidebarView: View {
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .help("Edit Connection...")
+                            .help(L("Edit Connection..."))
                             .accessibilityLabel("Edit \(conn.displayTitle)")
                             .opacity(hoveredConnectionId == conn.id ? 1 : 0)
                         }
@@ -132,23 +132,23 @@ public struct SidebarView: View {
                             hoveredConnectionId = hovering ? conn.id : (hoveredConnectionId == conn.id ? nil : hoveredConnectionId)
                         }
                         .contextMenu {
-                            Button("Connect") {
+                            Button(L("Connect")) {
                                 onOpenConnection(conn)
                             }
-                            Button("Edit Connection...") {
+                            Button(L("Edit Connection...")) {
                                 onEditConnection(conn)
                             }
-                            Button("Test Connection...") {
+                            Button(L("Test Connection...")) {
                                 if let onTest = onTestConnection {
                                     onTest(conn)
                                 } else {
                                     onEditConnection(conn)
                                 }
                             }
-                            Button("Duplicate Connection") {
+                            Button(L("Duplicate Connection")) {
                                 connectionManager.duplicateConnection(conn)
                             }
-                            Button("Open in Terminal SSH") {
+                            Button(L("Open in Terminal SSH")) {
                                 connectionManager.openSSHTerminal(for: conn)
                             }
                             let recent = bookmarkStore.recents(for: conn.id)
@@ -160,7 +160,7 @@ public struct SidebarView: View {
                                 }
                             }
                             Divider()
-                            Button("Delete", role: .destructive) {
+                            Button(L("Delete"), role: .destructive) {
                                 KeychainService.shared.deletePassword(for: conn)
                                 connectionManager.deleteConnection(id: conn.id)
                                 bookmarkStore.forget(connectionID: conn.id)
@@ -185,7 +185,7 @@ public struct SidebarView: View {
                             .padding(.leading, 22)
                             .help(bm.path)
                             .contextMenu {
-                                Button("Remove Bookmark") { bookmarkStore.remove(id: bm.id) }
+                                Button(L("Remove Bookmark")) { bookmarkStore.remove(id: bm.id) }
                             }
                         }
                     }
@@ -193,7 +193,7 @@ public struct SidebarView: View {
             }
 
             // Devices
-            Section(header: Text("Devices").font(.subheadline.weight(.semibold))) {
+            Section(header: Text(L("Devices")).font(.subheadline.weight(.semibold))) {
                 if DemoHelper.isDemoMode {
                     SidebarItemRow(name: "Macintosh HD", iconName: "internaldrive") {
                         onSelectLocation(URL(fileURLWithPath: "/"))
@@ -211,7 +211,7 @@ public struct SidebarView: View {
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Button(action: addCustomFolder) {
-                    Label("Add Folder...", systemImage: "plus")
+                    Label(L("Add Folder..."), systemImage: "plus")
                         .font(.subheadline)
                 }
                 .buttonStyle(.plain)

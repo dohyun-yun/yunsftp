@@ -286,3 +286,19 @@ Right-click any file or folder and select **Permissions (chmod)**:
 
 ### Custom Ports & Firewall Settings
 When connecting to SFTP on a non-standard port (e.g. `2222`), `yunsftp` formats the port strictly as integer digits without localization commas (`2222` instead of `2,222`). Ensure your server firewall allows TCP traffic on your designated port.
+
+---
+
+## 9. What's new since 1.0
+
+- **Settings** (`⌘,`): relative dates, visible columns, font size, delete confirmation, Terminal or iTerm for SSH sessions, update check, legacy-algorithm default for new connections.
+- **Import connections** from `~/.ssh/config`, Cyberduck and ForkLift 2 (connection manager → Import…).
+- **Conflicts ask first**: Replace / Keep Both / Skip / Cancel with "apply to all", for every kind of transfer.
+- **Transfers window** (`⌘⇧T`): queue, history, per-row cancel that stops the underlying `sftp` process, retry.
+- **Edit on the server**: right-click a remote file → *Edit in External Editor*. Each save uploads automatically; stop the session in the Transfers window.
+- **Undo** (`⌘Z`) for local rename, move and trash.
+- **Bookmarks and recents**: ★ in the path bar bookmarks the current remote folder; recent folders are in the connection's context menu.
+- **Find on Server** (`⌘⇧F`), folder sizes in Get Info, `⌘F` filter, `⌘⇧G` go to folder.
+- **Tabs** per pane (`⌘T`, `⌘W`, `⌘⇧[` / `⌘⇧]`).
+- **Drag to Finder**: remote files can be dropped into Finder or any other app.
+- **Korean UI** follows the system language.

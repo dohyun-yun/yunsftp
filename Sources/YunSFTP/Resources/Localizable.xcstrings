@@ -1,0 +1,1366 @@
+{
+  "sourceLanguage": "en",
+  "version": "1.0",
+  "strings": {
+    "\"%@\" already exists in %@": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"%1$@\" 항목이 %2$@에 이미 있습니다"
+          }
+        }
+      }
+    },
+    "A single request to GitHub Releases. Nothing about you or your servers is sent.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub 릴리스에 한 번 요청할 뿐, 사용자나 서버에 대한 정보는 보내지 않습니다."
+          }
+        }
+      }
+    },
+    "Add Connection...": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 추가..."
+          }
+        }
+      }
+    },
+    "Add Folder...": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폴더 추가..."
+          }
+        }
+      }
+    },
+    "Add your first server": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "첫 서버를 추가하세요"
+          }
+        }
+      }
+    },
+    "Allow legacy SSH algorithms on new connections": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 연결에서 레거시 SSH 알고리즘 허용"
+          }
+        }
+      }
+    },
+    "Apply to all remaining items": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "남은 항목에 모두 적용"
+          }
+        }
+      }
+    },
+    "Ask before deleting files on a server": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "서버의 파일을 삭제하기 전에 확인"
+          }
+        }
+      }
+    },
+    "Back (Cmd+[)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "뒤로 (Cmd+[)"
+          }
+        }
+      }
+    },
+    "Back to Local": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "로컬로 돌아가기"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "취소"
+          }
+        }
+      }
+    },
+    "Cancel All": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모두 취소"
+          }
+        }
+      }
+    },
+    "Cancel Connection": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 취소"
+          }
+        }
+      }
+    },
+    "Cancel Transfer": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전송 취소"
+          }
+        }
+      }
+    },
+    "Change Permissions (chmod)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "권한 변경 (chmod)"
+          }
+        }
+      }
+    },
+    "Check for updates once a day": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하루에 한 번 업데이트 확인"
+          }
+        }
+      }
+    },
+    "Clear Finished": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "완료 항목 지우기"
+          }
+        }
+      }
+    },
+    "Close": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "닫기"
+          }
+        }
+      }
+    },
+    "Close Tab (Cmd+W)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "탭 닫기 (Cmd+W)"
+          }
+        }
+      }
+    },
+    "Columns": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "열"
+          }
+        }
+      }
+    },
+    "Compare & Sync Panes": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "패널 비교 및 동기화"
+          }
+        }
+      }
+    },
+    "Compare & Sync…": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "비교 및 동기화…"
+          }
+        }
+      }
+    },
+    "Compress to Zip": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zip으로 압축"
+          }
+        }
+      }
+    },
+    "Connect": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결"
+          }
+        }
+      }
+    },
+    "Connect to Server (Cmd+K)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "서버에 연결 (Cmd+K)"
+          }
+        }
+      }
+    },
+    "Connected": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결됨"
+          }
+        }
+      }
+    },
+    "Connections": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결"
+          }
+        }
+      }
+    },
+    "Connect…": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결…"
+          }
+        }
+      }
+    },
+    "Copies, moves, uploads and downloads appear here. Finished items stay until you clear them.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복사, 이동, 업로드, 다운로드가 여기에 표시됩니다. 완료된 항목은 지울 때까지 남아 있습니다."
+          }
+        }
+      }
+    },
+    "Copy (Cmd+C)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복사 (Cmd+C)"
+          }
+        }
+      }
+    },
+    "Copy selected items to the other pane (F5)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택 항목을 반대 패널로 복사 (F5)"
+          }
+        }
+      }
+    },
+    "Copy to Other Pane": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "반대 패널로 복사"
+          }
+        }
+      }
+    },
+    "Copy to Other Pane (F5)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "반대 패널로 복사 (F5)"
+          }
+        }
+      }
+    },
+    "Could not check for updates": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트를 확인할 수 없습니다"
+          }
+        }
+      }
+    },
+    "Create New Folder (Cmd+Shift+N)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 폴더 만들기 (Cmd+Shift+N)"
+          }
+        }
+      }
+    },
+    "Cut (Cmd+X)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "잘라내기 (Cmd+X)"
+          }
+        }
+      }
+    },
+    "Date Modified": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "수정일"
+          }
+        }
+      }
+    },
+    "Delete": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "삭제"
+          }
+        }
+      }
+    },
+    "Delete \"%@\" from the server?": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "서버에서 \"%@\"을(를) 삭제하시겠습니까?"
+          }
+        }
+      }
+    },
+    "Delete %d items from the server?": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "서버에서 %d개 항목을 삭제하시겠습니까?"
+          }
+        }
+      }
+    },
+    "Delete / Move to Trash (Cmd+Backspace)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "삭제 / 휴지통으로 이동 (Cmd+Backspace)"
+          }
+        }
+      }
+    },
+    "Devices": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "장비"
+          }
+        }
+      }
+    },
+    "Disconnect": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 해제"
+          }
+        }
+      }
+    },
+    "Dismiss": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "닫기"
+          }
+        }
+      }
+    },
+    "Download": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다운로드"
+          }
+        }
+      }
+    },
+    "Dual Pane": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "듀얼 패널"
+          }
+        }
+      }
+    },
+    "Duplicate (Cmd+D)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복제 (Cmd+D)"
+          }
+        }
+      }
+    },
+    "Duplicate Connection": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 복제"
+          }
+        }
+      }
+    },
+    "Edit Connection...": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 편집..."
+          }
+        }
+      }
+    },
+    "Edit in External Editor": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "외부 편집기에서 편집"
+          }
+        }
+      }
+    },
+    "Edit path manually": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "경로 직접 입력"
+          }
+        }
+      }
+    },
+    "Enclosing Folder (Cmd+Up)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "상위 폴더 (Cmd+Up)"
+          }
+        }
+      }
+    },
+    "Enter path...": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "경로 입력..."
+          }
+        }
+      }
+    },
+    "Extract Archive": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "압축 해제"
+          }
+        }
+      }
+    },
+    "Favorites": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "즐겨찾기"
+          }
+        }
+      }
+    },
+    "Filter": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "필터"
+          }
+        }
+      }
+    },
+    "Filter this folder (Cmd+F)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 폴더 필터 (Cmd+F)"
+          }
+        }
+      }
+    },
+    "Filter...": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "필터..."
+          }
+        }
+      }
+    },
+    "Find on Server…": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "서버에서 찾기…"
+          }
+        }
+      }
+    },
+    "Folder is Empty": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "빈 폴더"
+          }
+        }
+      }
+    },
+    "Font size": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "글자 크기"
+          }
+        }
+      }
+    },
+    "Forward (Cmd+])": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앞으로 (Cmd+])"
+          }
+        }
+      }
+    },
+    "General": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일반"
+          }
+        }
+      }
+    },
+    "Get Info": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정보 보기"
+          }
+        }
+      }
+    },
+    "Get Info (Cmd+I)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정보 보기 (Cmd+I)"
+          }
+        }
+      }
+    },
+    "Go": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이동"
+          }
+        }
+      }
+    },
+    "Import from ssh config": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ssh config에서 가져오기"
+          }
+        }
+      }
+    },
+    "Import from ~/.ssh/config": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "~/.ssh/config에서 가져오기"
+          }
+        }
+      }
+    },
+    "Info": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정보"
+          }
+        }
+      }
+    },
+    "Initializing SFTP session and fetching the file list...": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SFTP 세션을 초기화하고 파일 목록을 가져오는 중..."
+          }
+        }
+      }
+    },
+    "Keep Both": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "둘 다 유지"
+          }
+        }
+      }
+    },
+    "Kind": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "종류"
+          }
+        }
+      }
+    },
+    "Later": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나중에"
+          }
+        }
+      }
+    },
+    "List": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "목록"
+          }
+        }
+      }
+    },
+    "Loading...": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "불러오는 중..."
+          }
+        }
+      }
+    },
+    "Local": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "로컬"
+          }
+        }
+      }
+    },
+    "Manage Connections (Cmd+K)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 관리 (Cmd+K)"
+          }
+        }
+      }
+    },
+    "More": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "더 보기"
+          }
+        }
+      }
+    },
+    "More actions": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "추가 동작"
+          }
+        }
+      }
+    },
+    "Move selected items to the other pane (F6)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택 항목을 반대 패널로 이동 (F6)"
+          }
+        }
+      }
+    },
+    "Move to Other Pane": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "반대 패널로 이동"
+          }
+        }
+      }
+    },
+    "Move to Other Pane (F6)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "반대 패널로 이동 (F6)"
+          }
+        }
+      }
+    },
+    "Move to Trash / delete on server (Cmd+Backspace)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "휴지통으로 이동 / 서버에서 삭제 (Cmd+Backspace)"
+          }
+        }
+      }
+    },
+    "Multi-Rename": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일괄 이름 변경"
+          }
+        }
+      }
+    },
+    "Multi-Rename selected files": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택 파일 일괄 이름 변경"
+          }
+        }
+      }
+    },
+    "Multi-Rename…": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일괄 이름 변경…"
+          }
+        }
+      }
+    },
+    "Name contains…": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이름에 포함…"
+          }
+        }
+      }
+    },
+    "New Folder": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 폴더"
+          }
+        }
+      }
+    },
+    "New Tab (Cmd+T)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 탭 (Cmd+T)"
+          }
+        }
+      }
+    },
+    "New tab": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 탭"
+          }
+        }
+      }
+    },
+    "No transfers yet": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아직 전송이 없습니다"
+          }
+        }
+      }
+    },
+    "Open (Cmd+O)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "열기 (Cmd+O)"
+          }
+        }
+      }
+    },
+    "Open Current Folder in Terminal": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현재 폴더를 터미널에서 열기"
+          }
+        }
+      }
+    },
+    "Open SSH sessions in": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 세션을 여는 앱"
+          }
+        }
+      }
+    },
+    "Open in Terminal": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "터미널에서 열기"
+          }
+        }
+      }
+    },
+    "Open in Terminal SSH": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "터미널에서 SSH 열기"
+          }
+        }
+      }
+    },
+    "Open the Transfers window (Cmd+Shift+T)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전송 창 열기 (Cmd+Shift+T)"
+          }
+        }
+      }
+    },
+    "Paste (Cmd+V)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "붙여넣기 (Cmd+V)"
+          }
+        }
+      }
+    },
+    "Permissions": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "권한"
+          }
+        }
+      }
+    },
+    "Permissions (chmod)...": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "권한 (chmod)..."
+          }
+        }
+      }
+    },
+    "Permissions…": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "권한…"
+          }
+        }
+      }
+    },
+    "Quick Look": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "훑어보기"
+          }
+        }
+      }
+    },
+    "Quick Look (Cmd+Y)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "훑어보기 (Cmd+Y)"
+          }
+        }
+      }
+    },
+    "Quick Look / Preview (Cmd+Y)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "훑어보기 / 미리보기 (Cmd+Y)"
+          }
+        }
+      }
+    },
+    "Refresh": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새로 고침"
+          }
+        }
+      }
+    },
+    "Refresh (Cmd+R)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새로 고침 (Cmd+R)"
+          }
+        }
+      }
+    },
+    "Refresh Active Pane (Cmd+R)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "활성 패널 새로 고침 (Cmd+R)"
+          }
+        }
+      }
+    },
+    "Reload": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다시 불러오기"
+          }
+        }
+      }
+    },
+    "Reload folder": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폴더 다시 불러오기"
+          }
+        }
+      }
+    },
+    "Remote files are removed permanently. This cannot be undone.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "원격 파일은 영구적으로 삭제되며 되돌릴 수 없습니다."
+          }
+        }
+      }
+    },
+    "Remove Bookmark": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "북마크 제거"
+          }
+        }
+      }
+    },
+    "Remove from Favorites": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "즐겨찾기에서 제거"
+          }
+        }
+      }
+    },
+    "Rename (Enter)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이름 변경 (Enter)"
+          }
+        }
+      }
+    },
+    "Replace": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "바꾸기"
+          }
+        }
+      }
+    },
+    "Replace it, keep both files, or skip this item?": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "바꾸시겠습니까, 둘 다 유지하시겠습니까, 아니면 이 항목을 건너뛰시겠습니까?"
+          }
+        }
+      }
+    },
+    "Retry": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "재시도"
+          }
+        }
+      }
+    },
+    "Reveal in Finder": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finder에서 보기"
+          }
+        }
+      }
+    },
+    "Reveal in Pane": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "패널에서 보기"
+          }
+        }
+      }
+    },
+    "Search": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "검색"
+          }
+        }
+      }
+    },
+    "Show All": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모두 보기"
+          }
+        }
+      }
+    },
+    "Show relative dates (Today, Yesterday)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "상대 날짜 표시 (오늘, 어제)"
+          }
+        }
+      }
+    },
+    "Size": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "크기"
+          }
+        }
+      }
+    },
+    "Skip": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건너뛰기"
+          }
+        }
+      }
+    },
+    "Skip This Version": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 버전 건너뛰기"
+          }
+        }
+      }
+    },
+    "Stop": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "중지"
+          }
+        }
+      }
+    },
+    "Sync": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "동기화"
+          }
+        }
+      }
+    },
+    "Terminal": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "터미널"
+          }
+        }
+      }
+    },
+    "Test Connection...": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 테스트..."
+          }
+        }
+      }
+    },
+    "Text": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "글자"
+          }
+        }
+      }
+    },
+    "Toggle Dual Pane Mode": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "듀얼 패널 전환"
+          }
+        }
+      }
+    },
+    "Toggle Hidden Files (Cmd+Shift+.)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "숨김 파일 표시 전환 (Cmd+Shift+.)"
+          }
+        }
+      }
+    },
+    "Toggle Selection (Space)": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택 전환 (Space)"
+          }
+        }
+      }
+    },
+    "You have %@. Download the new version from GitHub Releases.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현재 버전은 %@입니다. GitHub 릴리스에서 새 버전을 내려받으세요."
+          }
+        }
+      }
+    },
+    "You're up to date": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최신 버전입니다"
+          }
+        }
+      }
+    },
+    "yunsftp %@ is available": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "yunsftp %@ 사용 가능"
+          }
+        }
+      }
+    },
+    "yunsftp %@ is the latest version.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "yunsftp %@이(가) 최신 버전입니다."
+          }
+        }
+      }
+    }
+  }
+}

@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "yunsftp",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v13)
     ],
@@ -18,7 +19,7 @@ let package = Package(
             name: "yunsftp",
             dependencies: [],
             path: "Sources/YunSFTP",
-            resources: []
+            resources: [.process("Resources")]
         ),
         .testTarget(
             name: "YunSFTPTests",

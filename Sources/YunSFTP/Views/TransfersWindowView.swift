@@ -24,7 +24,7 @@ public struct TransfersWindowView: View {
                                         .font(.caption).foregroundStyle(s.lastError == nil ? Color.secondary : Color.red)
                                 }
                                 Spacer()
-                                Button("Stop") { edits.stop(sessionID: s.id) }.controlSize(.small)
+                                Button(L("Stop")) { edits.stop(sessionID: s.id) }.controlSize(.small)
                             }
                         }
                     }
@@ -39,9 +39,9 @@ public struct TransfersWindowView: View {
                     Image(systemName: "arrow.up.arrow.down.circle")
                         .font(.system(size: 40))
                         .foregroundStyle(.secondary)
-                    Text("No transfers yet")
+                    Text(L("No transfers yet"))
                         .font(.title3)
-                    Text("Copies, moves, uploads and downloads appear here. Finished items stay until you clear them.")
+                    Text(L("Copies, moves, uploads and downloads appear here. Finished items stay until you clear them."))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -66,10 +66,10 @@ public struct TransfersWindowView: View {
 
             Divider()
             HStack {
-                Button("Cancel All") { manager.cancelAll() }
+                Button(L("Cancel All")) { manager.cancelAll() }
                     .disabled(active.isEmpty)
                 Spacer()
-                Button("Clear Finished") { manager.clearCompleted() }
+                Button(L("Clear Finished")) { manager.clearCompleted() }
                     .disabled(finished.isEmpty)
             }
             .padding(10)
@@ -123,11 +123,11 @@ struct TransferRow: View {
                     Image(systemName: "xmark.circle.fill")
                 }
                 .buttonStyle(.plain)
-                .help("Cancel")
+                .help(L("Cancel"))
                 .accessibilityLabel("Cancel \(item.fileName)")
             case .failed, .cancelled:
                 if TransferCoordinator.shared.canRetry(taskID: item.id) {
-                    Button("Retry") { TransferCoordinator.shared.retry(taskID: item.id) }
+                    Button(L("Retry")) { TransferCoordinator.shared.retry(taskID: item.id) }
                         .controlSize(.small)
                 }
             case .completed:

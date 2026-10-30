@@ -116,11 +116,14 @@ extension SecurityHardeningTests {
 
     @MainActor
     func testRemoteDeleteAlertTextMentionsPermanence() {
+        // Localized: compare against the catalog lookups rather than English literals.
         let single = MainWindowView.remoteDeleteAlertText(itemNames: ["report.pdf"])
-        XCTAssertEqual(single.title, "Delete \"report.pdf\" from the server?")
-        XCTAssertTrue(single.message.contains("permanently"))
+        XCTAssertEqual(single.title, L("Delete \"%@\" from the server?", "report.pdf"))
+        XCTAssertTrue(single.title.contains("report.pdf"))
+        XCTAssertEqual(single.message, L("Remote files are removed permanently. This cannot be undone."))
         let many = MainWindowView.remoteDeleteAlertText(itemNames: ["a", "b", "c"])
-        XCTAssertEqual(many.title, "Delete 3 items from the server?")
+        XCTAssertEqual(many.title, L("Delete %d items from the server?", 3))
+        XCTAssertTrue(many.title.contains("3"))
     }
 }
 

@@ -23,7 +23,7 @@ struct PaneTabBar: View {
                     }
                     .buttonStyle(.plain)
                     .opacity(hovered == index || selected ? 0.7 : 0)
-                    .help("Close Tab (Cmd+W)")
+                    .help(L("Close Tab (Cmd+W)"))
                     .accessibilityLabel("Close tab \(PaneStack.title(for: pane))")
                 }
                 .padding(.horizontal, 8)
@@ -43,8 +43,8 @@ struct PaneTabBar: View {
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 6)
-            .help("New Tab (Cmd+T)")
-            .accessibilityLabel("New tab")
+            .help(L("New Tab (Cmd+T)"))
+            .accessibilityLabel(L("New tab"))
             Spacer(minLength: 0)
         }
         .background(Color(NSColor.windowBackgroundColor))

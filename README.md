@@ -63,7 +63,8 @@ Prefer building it yourself? See [Build from source](#build-from-source).
 | **🗂 Dual-pane transfers**<br>Copy/move between any two locations: local↔local, local↔server, server↔server. Keep-both, replace or skip on conflicts, with "apply to all". | **📋 Transfers window** (`⌘⇧T`)<br>Queue, per-item cancel that really stops the transfer, retry for failures, and history. |
 | **✏️ Edit on the server**<br>Open a remote file in your editor; every save uploads automatically until you stop the session. | **🔎 Find on server** (`⌘⇧F`)<br>Recursive name search below the current remote folder, double-click to reveal. |
 | **⌨️ Finder keyboard parity**<br>`Return`, `⌘↓`, `Space`, `⇧↑/↓` range selection, `⌘⇧N`, `⌘⌫`, `⌘F` filter, `⌘⇧G` go to folder, `⌘Z` undo. | **🧰 File tools**<br>Quick Look, Get Info with folder sizes, chmod, multi-rename, compare & sync, zip/unzip, open in Terminal or iTerm. |
-| **🌏 Unicode done right**<br>NFC/NFD normalization and decoding of `ls` escape sequences, so `한글 파일.txt` is `한글 파일.txt` everywhere. | **⚙️ Settings** (`⌘,`)<br>Relative dates, visible columns, font size, delete confirmation, terminal app, update check. Toolbar is customizable. |
+| **🌏 Unicode done right**<br>NFC/NFD normalization and decoding of `ls` escape sequences, so `한글 파일.txt` is `한글 파일.txt` everywhere. UI in English and Korean. | **⚙️ Settings** (`⌘,`)<br>Relative dates, visible columns, font size, delete confirmation, terminal app, update check. Toolbar is customizable. |
+| **🗂 Tabs** (`⌘T`)<br>Several folders or servers per pane; `⌘⇧[` / `⌘⇧]` switch, `⌘W` closes. | **📤 Drag to Finder**<br>Drag a remote file onto the Desktop, Mail or any app: it downloads on drop. |
 
 ## Security and privacy
 
@@ -121,7 +122,7 @@ Only to your servers. The optional update check requests `api.github.com/repos/d
 
 ## Roadmap
 
-Progress is tracked in [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md). Next up: tabs per pane, dragging remote files straight into Finder, Korean UI localization, a native SFTP engine for true byte-level progress and resume, and signed/notarized releases.
+Progress is tracked in [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md). Next up: a native SFTP engine for true byte-level progress and resume, signed/notarized releases with a Homebrew cask, and a SwiftUI `Table`-based file list.
 
 ## Build from source
 

@@ -88,14 +88,14 @@ public final class UpdateChecker {
                 presentUpdateAlert(info, allowSkip: false)
             } else {
                 let alert = NSAlert()
-                alert.messageText = "You're up to date"
-                alert.informativeText = "yunsftp \(Self.currentVersion) is the latest version."
+                alert.messageText = L("You're up to date")
+                alert.informativeText = L("yunsftp %@ is the latest version.", Self.currentVersion)
                 alert.runModal()
             }
         } catch {
             let alert = NSAlert()
             alert.alertStyle = .warning
-            alert.messageText = "Could not check for updates"
+            alert.messageText = L("Could not check for updates")
             alert.informativeText = error.localizedDescription
             alert.runModal()
         }
@@ -103,11 +103,11 @@ public final class UpdateChecker {
 
     private func presentUpdateAlert(_ info: UpdateInfo, allowSkip: Bool) {
         let alert = NSAlert()
-        alert.messageText = "yunsftp \(info.version) is available"
-        alert.informativeText = "You have \(Self.currentVersion). Download the new version from GitHub Releases."
-        alert.addButton(withTitle: "Download")
-        alert.addButton(withTitle: "Later")
-        if allowSkip { alert.addButton(withTitle: "Skip This Version") }
+        alert.messageText = L("yunsftp %@ is available", info.version)
+        alert.informativeText = L("You have %@. Download the new version from GitHub Releases.", Self.currentVersion)
+        alert.addButton(withTitle: L("Download"))
+        alert.addButton(withTitle: L("Later"))
+        if allowSkip { alert.addButton(withTitle: L("Skip This Version")) }
         switch alert.runModal() {
         case .alertFirstButtonReturn: NSWorkspace.shared.open(info.url)
         case .alertThirdButtonReturn: skip(version: info.version)

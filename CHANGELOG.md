@@ -24,6 +24,10 @@ All notable changes to this project are documented here. The format follows
 - Folder size in Get Info; recursive "Find on Server" (`⌘⇧F`).
 - `⌘F` on-demand filter, `⌘⇧G` go to folder, customizable toolbar with a More menu.
 - Daily update check against GitHub Releases (opt-out) and a "Check for Updates…" menu item.
+- Tabs per pane (`⌘T`, `⌘W`, `⌘⇧[` / `⌘⇧]`).
+- Drag remote files straight into Finder or other apps (file promises).
+- Korean UI (String Catalog); English remains the fallback.
+- Light/dark documentation screenshots rendered in-process by the demo mode.
 - Tag-triggered release workflow with optional Developer ID signing and notarization.
 - Per-connection "Allow legacy SSH algorithms" toggle (off by default) for devices that only offer SHA-1 key exchange / `ssh-rsa`.
 - CI workflow, SECURITY.md, CONTRIBUTING.md, issue and PR templates, Korean README.

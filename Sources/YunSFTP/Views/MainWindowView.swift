@@ -610,9 +610,9 @@ public struct MainWindowView: View {
 
     static func remoteDeleteAlertText(itemNames: [String]) -> (title: String, message: String) {
         let title = itemNames.count == 1
-            ? "Delete \"\(itemNames[0])\" from the server?"
-            : "Delete \(itemNames.count) items from the server?"
-        return (title, "Remote files are removed permanently. This cannot be undone.")
+            ? L("Delete \"%@\" from the server?", itemNames[0])
+            : L("Delete %d items from the server?", itemNames.count)
+        return (title, L("Remote files are removed permanently. This cannot be undone."))
     }
 
     private static func confirmRemoteDelete(itemNames: [String]) -> Bool {
@@ -621,8 +621,8 @@ public struct MainWindowView: View {
         alert.alertStyle = .warning
         alert.messageText = text.title
         alert.informativeText = text.message
-        alert.addButton(withTitle: "Delete")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("Delete"))
+        alert.addButton(withTitle: L("Cancel"))
         return alert.runModal() == .alertFirstButtonReturn
     }
 

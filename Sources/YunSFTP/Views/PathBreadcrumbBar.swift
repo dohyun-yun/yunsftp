@@ -17,7 +17,7 @@ public struct PathBreadcrumbBar: View {
                 }
                 .disabled(!pane.canGoBack)
                 .buttonStyle(.plain)
-                .help("Back (Cmd+[)")
+                .help(L("Back (Cmd+[)"))
 
                 Button(action: { pane.goForward() }) {
                     Image(systemName: "chevron.right")
@@ -25,7 +25,7 @@ public struct PathBreadcrumbBar: View {
                 }
                 .disabled(!pane.canGoForward)
                 .buttonStyle(.plain)
-                .help("Forward (Cmd+])")
+                .help(L("Forward (Cmd+])"))
 
                 Button(action: { pane.goUp() }) {
                     Image(systemName: "arrow.up")
@@ -33,7 +33,7 @@ public struct PathBreadcrumbBar: View {
                 }
                 .disabled(!pane.canGoUp)
                 .buttonStyle(.plain)
-                .help("Enclosing Folder (Cmd+Up)")
+                .help(L("Enclosing Folder (Cmd+Up)"))
             }
             .padding(.trailing, 4)
 
@@ -62,7 +62,7 @@ public struct PathBreadcrumbBar: View {
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("Disconnect")
+                    .help(L("Disconnect"))
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2.5)
@@ -85,7 +85,7 @@ public struct PathBreadcrumbBar: View {
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
 
-                    Text("Local")
+                    Text(L("Local"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(.primary)
                         .lineLimit(1)
@@ -106,7 +106,7 @@ public struct PathBreadcrumbBar: View {
             // Path Breadcrumbs or Text Field
             if isEditingPath {
                 HStack {
-                    TextField("Enter path...", text: $customPathText, onCommit: {
+                    TextField(L("Enter path..."), text: $customPathText, onCommit: {
                         applyCustomPath()
                     })
                     .textFieldStyle(.roundedBorder)
@@ -115,13 +115,13 @@ public struct PathBreadcrumbBar: View {
                     .onExitCommand { isEditingPath = false }
                     .onAppear { isPathFieldFocused = true }
 
-                    Button("Go") {
+                    Button(L("Go")) {
                         applyCustomPath()
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
 
-                    Button("Cancel") {
+                    Button(L("Cancel")) {
                         isEditingPath = false
                     }
                     .buttonStyle(.bordered)
@@ -202,7 +202,7 @@ public struct PathBreadcrumbBar: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .help("Edit path manually")
+            .help(L("Edit path manually"))
 
             // Reload button
             if pane.isRemote, let conn = pane.remoteConnection {
@@ -223,7 +223,7 @@ public struct PathBreadcrumbBar: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .help("Reload folder")
+            .help(L("Reload folder"))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)

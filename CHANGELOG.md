@@ -5,6 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [1.2.0] - 2026-10-31
+
 ### Added
 - Native SSH/SFTP engine (Citadel / swift-nio-ssh): persistent session per server, byte-level transfer progress, directory listings from the protocol instead of `ls` parsing, known_hosts trust-on-first-use. The OpenSSH transport remains as automatic fallback and can be pinned in Settings → Connections.
 
@@ -66,6 +70,7 @@ _Crashed at launch when built by CI; replaced by 1.1.1._
 ## [1.0.0] - 2026-10-19
 - Initial public release.
 
-[Unreleased]: https://github.com/dohyun-yun/yunsftp/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/dohyun-yun/yunsftp/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/dohyun-yun/yunsftp/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/dohyun-yun/yunsftp/compare/v1.0.0...v1.1.1
 [1.0.0]: https://github.com/dohyun-yun/yunsftp/releases/tag/v1.0.0

@@ -42,6 +42,10 @@ public class PaneModel: ObservableObject, Identifiable {
     @Published public var remoteConnection: RemoteConnection? = nil
     @Published public var remotePath: String = "/"
     public var remotePassword: String? = nil
+    /// Connection of the last remote session, kept so Back/Forward can re-enter it after the
+    /// pane switched to a local location.
+    public private(set) var lastRemoteConnection: RemoteConnection? = nil
+    private var lastRemotePassword: String? = nil
 
     private var history: [URL] = []
     private var historyIndex: Int = -1
@@ -86,8 +90,7 @@ public class PaneModel: ObservableObject, Identifiable {
         self.selectionAnchorURL = nil
         self.focusedItemURL = nil
         self.searchQuery = ""
-        self.history = [virtualURL]
-        self.historyIndex = 0
+        appendHistory(virtualURL)
         self.isConnecting = true
         self.isLoading = true
         self.errorMessage = nil
@@ -96,6 +99,16 @@ public class PaneModel: ObservableObject, Identifiable {
     }
 
     public func disconnectRemote() {
+        leaveRemoteMode()
+        navigateTo(FileManager.default.homeDirectoryForCurrentUser, addToHistory: true)
+    }
+
+    /// Switches the pane back to local browsing without navigating anywhere yet.
+    private func leaveRemoteMode() {
+        if let conn = remoteConnection {
+            lastRemoteConnection = conn
+            lastRemotePassword = remotePassword
+        }
         self.isRemote = false
         self.remoteConnection = nil
         self.remotePassword = nil
@@ -103,7 +116,14 @@ public class PaneModel: ObservableObject, Identifiable {
         self.isConnecting = false
         self.connectingMessage = ""
         self.errorMessage = nil
-        navigateTo(FileManager.default.homeDirectoryForCurrentUser, addToHistory: true)
+    }
+
+    private func appendHistory(_ url: URL) {
+        if historyIndex >= 0 && historyIndex < history.count - 1 {
+            history.removeSubrange((historyIndex + 1)..<history.count)
+        }
+        history.append(url)
+        historyIndex = history.count - 1
     }
 
     public func navigateToRemote(path: String, addToHistory: Bool = true) {
@@ -122,21 +142,30 @@ public class PaneModel: ObservableObject, Identifiable {
         self.errorMessage = nil
 
         if addToHistory {
-            if historyIndex >= 0 && historyIndex < history.count - 1 {
-                history.removeSubrange((historyIndex + 1)..<history.count)
-            }
-            history.append(virtualURL)
-            historyIndex = history.count - 1
+            appendHistory(virtualURL)
         }
 
         loadItems()
     }
 
     public func navigateTo(_ url: URL, addToHistory: Bool = true) {
-        if isRemote || url.scheme == "sftp" {
+        // The destination's scheme decides the mode. A sidebar favourite or a history entry is a
+        // file URL even while the pane shows a server, and must switch the pane back to local.
+        if url.scheme == "sftp" {
+            if !isRemote {
+                guard let conn = lastRemoteConnection,
+                      conn.host == url.host, (url.port ?? 22) == conn.port else { return }
+                isRemote = true
+                remoteConnection = conn
+                remotePassword = lastRemotePassword
+            }
             let path = url.path.isEmpty ? "/" : url.path
             navigateToRemote(path: path.precomposedStringWithCanonicalMapping, addToHistory: addToHistory)
             return
+        }
+        guard url.isFileURL else { return }
+        if isRemote {
+            leaveRemoteMode()
         }
 
         let targetURL = url.standardized
@@ -153,11 +182,7 @@ public class PaneModel: ObservableObject, Identifiable {
         self.searchQuery = ""
 
         if addToHistory {
-            if historyIndex >= 0 && historyIndex < history.count - 1 {
-                history.removeSubrange((historyIndex + 1)..<history.count)
-            }
-            history.append(targetURL)
-            historyIndex = history.count - 1
+            appendHistory(targetURL)
         }
 
         loadItems()

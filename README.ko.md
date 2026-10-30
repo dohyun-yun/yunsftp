@@ -45,10 +45,10 @@
 ```bash
 brew tap dohyun-yun/yunsftp
 brew trust dohyun-yun/yunsftp          # 최신 Homebrew는 서드파티 tap을 처음 쓸 때 한 번 확인합니다
-brew install --cask yunsftp            # 첫 실행 Gatekeeper 단계를 건너뛰려면 --no-quarantine 추가
+brew install --cask yunsftp
 ```
 
-이후 업데이트는 `brew upgrade --cask yunsftp`로 합니다.
+설치 후 아래 첫 실행 단계를 한 번 거치세요(Homebrew 7에는 `--no-quarantine` 옵션이 없습니다). 이후 업데이트는 `brew upgrade --cask yunsftp`로 합니다.
 
 **직접 다운로드**
 

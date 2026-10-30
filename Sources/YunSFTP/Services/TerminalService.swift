@@ -3,22 +3,30 @@ import AppKit
 
 public struct TerminalService {
     public static func openInTerminal(at directoryURL: URL) {
-        let path = directoryURL.path
-        let script = """
+        let ok = runInTerminal("cd \(SFTPService.posixShellEscape(directoryURL.path))")
+        if !ok {
+            // Fallback: open Terminal via NSWorkspace
+            NSWorkspace.shared.open([directoryURL], withApplicationAt: URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"), configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
+        }
+    }
+
+    /// Runs an already shell-quoted command in a new Terminal tab. Returns false on AppleScript error.
+    @discardableResult
+    public static func runInTerminal(_ shellCommand: String) -> Bool {
+        let script = appleScriptSource(for: shellCommand)
+        guard let appleScript = NSAppleScript(source: script) else { return false }
+        var error: NSDictionary?
+        appleScript.executeAndReturnError(&error)
+        return error == nil
+    }
+
+    static func appleScriptSource(for shellCommand: String) -> String {
+        return """
         tell application "Terminal"
             activate
-            do script "cd \(escapeForAppleScript(path))"
+            do script \(escapeForAppleScript(shellCommand))
         end tell
         """
-
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
-            if error != nil {
-                // Fallback: open Terminal via NSWorkspace
-                NSWorkspace.shared.open([directoryURL], withApplicationAt: URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"), configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
-            }
-        }
     }
 
     public static func revealInFinder(url: URL) {
@@ -29,7 +37,7 @@ public struct TerminalService {
         NSWorkspace.shared.open(url)
     }
 
-    private static func escapeForAppleScript(_ string: String) -> String {
+    static func escapeForAppleScript(_ string: String) -> String {
         return "\"" + string.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 }

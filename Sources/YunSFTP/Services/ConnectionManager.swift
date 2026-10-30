@@ -142,26 +142,22 @@ public class ConnectionManager: ObservableObject {
         return res
     }
 
+    /// Builds the interactive `ssh` command line for Terminal. Every user-controlled field is
+    /// single-quoted for the shell and `--` prevents a host starting with `-` from being parsed
+    /// as an option.
+    nonisolated public static func sshCommand(for connection: RemoteConnection) -> String {
+        let q = SFTPService.posixShellEscape
+        var parts = ["ssh", "-p", String(connection.port)]
+        if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
+            parts += ["-i", q((connection.keyFilePath as NSString).expandingTildeInPath)]
+        }
+        let target = connection.username.isEmpty ? connection.host : "\(connection.username)@\(connection.host)"
+        parts += ["--", q(target)]
+        return parts.joined(separator: " ")
+    }
+
     public func openSSHTerminal(for connection: RemoteConnection) {
         guard !connection.host.isEmpty else { return }
-
-        let userPart = connection.username.isEmpty ? "" : "\(connection.username)@"
-        var sshCmd = "ssh -p \(connection.port) \(userPart)\(connection.host)"
-
-        if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
-            sshCmd = "ssh -i \(connection.keyFilePath) -p \(connection.port) \(userPart)\(connection.host)"
-        }
-
-        let script = """
-        tell application "Terminal"
-            activate
-            do script "\(sshCmd)"
-        end tell
-        """
-
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
-        }
+        TerminalService.runInTerminal(Self.sshCommand(for: connection))
     }
 }

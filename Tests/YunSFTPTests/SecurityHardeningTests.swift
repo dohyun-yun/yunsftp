@@ -67,3 +67,32 @@ extension SecurityHardeningTests {
         XCTAssertEqual(bareCatches.count, 2, "unguarded catch blocks: \(bareCatches.count)")
     }
 }
+
+extension SecurityHardeningTests {
+
+    // MARK: - Item 4: Terminal AppleScript must not be injectable through connection fields
+
+    func testSSHCommandQuotesHostileConnectionFields() {
+        let conn = RemoteConnection(
+            name: "evil",
+            host: "example.com; rm -rf ~",
+            port: 2222,
+            username: "me\"; say pwned; \"",
+            authType: .sshKey,
+            keyFilePath: "~/my keys/id_ed25519"
+        )
+        let cmd = ConnectionManager.sshCommand(for: conn)
+        XCTAssertEqual(cmd, "ssh -p 2222 -i '\(NSHomeDirectory())/my keys/id_ed25519' -- 'me\"; say pwned; \"@example.com; rm -rf ~'")
+    }
+
+    func testSSHCommandBlocksOptionInjectionViaHost() {
+        let conn = RemoteConnection(name: "opt", host: "-oProxyCommand=touch /tmp/x", port: 22)
+        let cmd = ConnectionManager.sshCommand(for: conn)
+        XCTAssertTrue(cmd.hasSuffix("-- '-oProxyCommand=touch /tmp/x'"))
+    }
+
+    func testAppleScriptSourceEscapesQuotesAndBackslashes() {
+        let src = TerminalService.appleScriptSource(for: "echo 'a\"b\\c'")
+        XCTAssertTrue(src.contains("do script \"echo 'a\\\"b\\\\c'\""))
+    }
+}

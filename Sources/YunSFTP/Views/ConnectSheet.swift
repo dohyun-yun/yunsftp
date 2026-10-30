@@ -33,7 +33,7 @@ public struct ConnectSheet: View {
                     Spacer()
                     Button(action: createNewConnection) {
                         Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.callout.weight(.bold))
                     }
                     .buttonStyle(.plain)
                     .help("Add New Connection")
@@ -48,7 +48,7 @@ public struct ConnectSheet: View {
                 List(selection: $selectedConnectionId) {
                     if connectionManager.connections.isEmpty {
                         Text("No saved connections")
-                            .font(.system(size: 11))
+                            .font(.subheadline)
                             .foregroundColor(.secondary)
                             .padding(.vertical, 8)
                     } else {
@@ -81,18 +81,26 @@ public struct ConnectSheet: View {
 
                 Divider()
 
-                // Bottom import button
+                // Bottom import menu
                 VStack(spacing: 4) {
-                    Button(action: importFromForkLift2) {
-                        Label("Import from ForkLift 2", systemImage: "arrow.down.doc")
-                            .font(.system(size: 11))
+                    Menu {
+                        Button("SSH config (~/.ssh/config)") { report(connectionManager.importFromSSHConfig()) }
+                            .disabled(!FileManager.default.fileExists(atPath: SSHConfigImporter.userConfigURL.path))
+                        Button("Cyberduck bookmarks") { report(connectionManager.importFromCyberduck()) }
+                            .disabled(!FileManager.default.fileExists(atPath: CyberduckImporter.bookmarksDirectory.path))
+                        Button("ForkLift 2 bookmarks") { importFromForkLift2() }
+                            .disabled(!MigrationService.shared.hasForkLift2Data())
+                    } label: {
+                        Label("Import…", systemImage: "arrow.down.doc")
+                            .font(.subheadline)
                     }
-                    .buttonStyle(.plain)
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
                     .padding(.vertical, 6)
 
                     if let msg = importMessage {
                         Text(msg)
-                            .font(.system(size: 10))
+                            .font(.caption)
                             .foregroundColor(.accentColor)
                             .lineLimit(1)
                     }
@@ -228,7 +236,8 @@ public struct ConnectSheet: View {
     }
 
     private func createNewConnection() {
-        let newConn = RemoteConnection(name: "New Server", connectionProtocol: .sftp, host: "", port: 22)
+        let newConn = RemoteConnection(name: "New Server", connectionProtocol: .sftp, host: "", port: 22,
+                                       allowLegacyAlgorithms: SettingsStore.shared.settings.legacyAlgorithmsByDefault)
         connectionManager.addConnection(newConn)
         selectedConnectionId = newConn.id
         testResult = nil
@@ -245,6 +254,11 @@ public struct ConnectSheet: View {
                 self.isTesting = false
             }
         }
+    }
+
+    private func report(_ added: Int) {
+        importMessage = added > 0 ? "Imported \(added) connections!" : "Nothing new to import."
+        if added > 0 { selectedConnectionId = connectionManager.connections.last?.id }
     }
 
     private func importFromForkLift2() {
@@ -335,7 +349,7 @@ private struct ConnectionDetailEditorView: View {
                         .font(.title3.bold())
                     if connection.isImportedFromForkLift2 {
                         Text("Migrated from ForkLift 2")
-                            .font(.system(size: 10))
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
@@ -346,7 +360,7 @@ private struct ConnectionDetailEditorView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Name:")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .frame(width: 80, alignment: .trailing)
                     TextField("Friendly name", text: $connection.name)
                         .textFieldStyle(.roundedBorder)
@@ -354,7 +368,7 @@ private struct ConnectionDetailEditorView: View {
 
                 HStack {
                     Text("Protocol:")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .frame(width: 80, alignment: .trailing)
                     Picker("", selection: $connection.connectionProtocol) {
                         ForEach(ConnectionProtocol.implemented.contains(connection.connectionProtocol)
@@ -371,13 +385,13 @@ private struct ConnectionDetailEditorView: View {
 
                 HStack {
                     Text("Server:")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .frame(width: 80, alignment: .trailing)
                     TextField("host or IP (e.g. 192.168.1.10 or nas.example.com)", text: $connection.host)
                         .textFieldStyle(.roundedBorder)
 
                     Text("Port:")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.subheadline.weight(.medium))
 
                     // Pure numeric string binding - guarantees NO commas can ever be typed or displayed
                     TextField("Port", text: Binding(
@@ -397,7 +411,7 @@ private struct ConnectionDetailEditorView: View {
 
                 HStack {
                     Text("Username:")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .frame(width: 80, alignment: .trailing)
                     TextField("Username", text: $connection.username)
                         .textFieldStyle(.roundedBorder)
@@ -405,7 +419,7 @@ private struct ConnectionDetailEditorView: View {
 
                 HStack {
                     Text("Path:")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .frame(width: 80, alignment: .trailing)
                     TextField("/path/to/folder", text: $connection.remotePath)
                         .textFieldStyle(.roundedBorder)
@@ -414,7 +428,7 @@ private struct ConnectionDetailEditorView: View {
                 if connection.connectionProtocol == .sftp {
                     HStack {
                         Text("Auth Type:")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.subheadline.weight(.medium))
                             .frame(width: 80, alignment: .trailing)
                         Picker("", selection: $connection.authType) {
                             ForEach(AuthenticationType.allCases) { auth in
@@ -428,9 +442,9 @@ private struct ConnectionDetailEditorView: View {
                         Spacer().frame(width: 84)
                         VStack(alignment: .leading, spacing: 2) {
                             Toggle("Allow legacy SSH algorithms (SHA-1 key exchange, ssh-rsa)", isOn: $connection.allowLegacyAlgorithms)
-                                .font(.system(size: 10))
+                                .font(.caption)
                             Text("Only for old devices that fail with \"no matching key exchange method\". Weakens security for this connection.")
-                                .font(.system(size: 9))
+                                .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -438,7 +452,7 @@ private struct ConnectionDetailEditorView: View {
                     if connection.authType == .sshKey {
                         HStack {
                             Text("Private Key:")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.subheadline.weight(.medium))
                                 .frame(width: 80, alignment: .trailing)
                             TextField("Key file path", text: $connection.keyFilePath)
                                 .textFieldStyle(.roundedBorder)
@@ -451,7 +465,7 @@ private struct ConnectionDetailEditorView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text("Password:")
-                                    .font(.system(size: 11, weight: .medium))
+                                    .font(.subheadline.weight(.medium))
                                     .frame(width: 80, alignment: .trailing)
                                 SecureField("Server password (leave blank to prompt on connect)", text: $inputPassword)
                                     .textFieldStyle(.roundedBorder)
@@ -460,12 +474,12 @@ private struct ConnectionDetailEditorView: View {
                             HStack {
                                 Spacer().frame(width: 84)
                                 Toggle("Save password in Keychain", isOn: $savePasswordToKeychain)
-                                    .font(.system(size: 10))
+                                    .font(.caption)
                                     .foregroundColor(.secondary)
 
                                 if KeychainService.shared.loadPassword(for: connection) != nil {
                                     Text("• Saved in Keychain")
-                                        .font(.system(size: 10))
+                                        .font(.caption)
                                         .foregroundColor(.green)
                                 }
                             }
@@ -511,16 +525,16 @@ private struct ConnectionDetailEditorView: View {
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: res.isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
                             .foregroundColor(res.isSuccess ? .green : .red)
-                            .font(.system(size: 14))
+                            .font(.title3)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(res.message)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.subheadline.weight(.medium))
                                 .foregroundColor(res.isSuccess ? .primary : .red)
 
                             if let ip = res.resolvedIP {
                                 Text(verbatim: "IP: \(ip)  •  Latency: \(String(Int(res.latencyMs))) ms")
-                                    .font(.system(size: 10))
+                                    .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                         }
@@ -599,17 +613,17 @@ private struct ConnectionRowView: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: connection.connectionProtocol.systemIconName)
-                .font(.system(size: 14))
+                .font(.title3)
                 .foregroundColor(isSelected ? .white : .accentColor)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(connection.displayTitle)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundColor(isSelected ? .white : .primary)
                     .lineLimit(1)
 
                 Text(connection.displaySubtitle)
-                    .font(.system(size: 10))
+                    .font(.caption)
                     .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
                     .lineLimit(1)
             }
@@ -618,7 +632,7 @@ private struct ConnectionRowView: View {
 
             if connection.isImportedFromForkLift2 {
                 Image(systemName: "arrow.triangle.merge")
-                    .font(.system(size: 9))
+                    .font(.caption2)
                     .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
                     .help("Migrated from ForkLift 2")
             }

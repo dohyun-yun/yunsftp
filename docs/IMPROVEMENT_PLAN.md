@@ -32,3 +32,43 @@ Status board for the hardening pass. One commit per item. Legend: `[ ]` todo, `[
 - [-] 20. Host key fingerprint confirmation UI (item 1 uses trust-on-first-use via `accept-new`).
 - [x] 21. Per-connection "Allow legacy SSH algorithms" toggle (off by default) with an actionable error when negotiation fails.
 - [x] 22. Purge leaked personal host/port from git history (filter-repo, force-pushed main, branch and tag).
+
+---
+
+# Phase 2: Adoption, UX and polish
+
+Legend as above. Order = execution order.
+
+## A. Release, settings, onboarding
+
+- [x] 23. Release workflow: on `v*` tag build the app, create dmg/zip/checksums and attach to the GitHub Release (signing/notarization steps run only when secrets exist).
+- [x] 24. Fix Swift 6 strict-concurrency warnings (ConnectionTestService captured var).
+- [x] 25. Settings window: font size, relative dates, visible columns, delete confirmation, terminal app, default legacy-algorithms flag.
+- [x] 26. Import hosts from `~/.ssh/config` (and Cyberduck bookmarks if present) with a first-run empty state that offers it.
+- [x] 27. List polish: relative dates by default, Perms hidden by default, `Kind` without "Remote" prefix, checkmark only for multi-selection, columns auto-hide in narrow panes.
+- [x] 28. Filter field hidden until `Cmd+F`; `Cmd+Shift+G` go-to-path; pane header shows one connection chip (no duplicate breadcrumb root).
+- [x] 29. Toolbar: six primary actions + overflow menu, user-customizable, accessibility labels on every icon-only control.
+- [x] 30. Sidebar: status dot instead of "ONLINE" pill, hover-only edit button, no truncation at default width.
+- [x] 31. Typography and color: system text styles instead of 9–11pt hardcoded sizes; semantic colors; light-mode pass.
+- [x] 32. Empty states: first launch, empty folder, connection failure each with a next action.
+
+## B. Transfers and file operations
+
+- [x] 33. Conflict dialog: Replace / Skip / Keep both / Apply to all for local and SFTP transfers.
+- [x] 34. Transfer window: queue list, per-item cancel, retry failed, history; batch-scoped cancel tokens replace the global cancel.
+- [x] 35. Shared transfer coordinator replacing the nine near-identical copy/move/drop/paste loops.
+- [x] 36. Edit remote file in external editor with auto-upload on save (FSEvents watch).
+- [x] 37. Undo for local rename / move / trash.
+- [x] 38. Remote path bookmarks and recent locations per connection.
+- [x] 39. Folder size on demand in Get Info; remote recursive search.
+- [x] 40. Update check against GitHub Releases (menu item + startup once a day, opt-out).
+
+## C. Bigger features
+
+- [x] 41. Tabs per pane (`Cmd+T`, `Cmd+W`, `Cmd+Shift+]`).
+- [x] 42. Drag remote files out to Finder via file promises.
+- [x] 43. Localization: English + Korean String Catalog; `README.ko.md`.
+- [x] 44. README restructure: hero, install in 30 seconds, feature grid, trust section, FAQ, roadmap, badges; refreshed light/dark screenshots.
+- [-] 45. Native SFTP library (swift-nio-ssh) replacing the `sftp` process transport — needs a design decision with the owner.
+- [-] 46. SwiftUI `Table` prototype for the file list — only after 27/28 land; needs a spike to confirm selection behaviour parity.
+- [-] 47. Developer ID signing + notarization and Homebrew cask tap — need the owner's Apple Developer account and a tap repository.

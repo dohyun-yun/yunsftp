@@ -33,6 +33,20 @@ public class PaneModel: ObservableObject, Identifiable {
     @Published public var showHiddenFiles: Bool = false
     @Published public var viewMode: ViewMode = .list
     @Published public var searchQuery: String = ""
+    /// Filter field is hidden until Cmd+F (or while a query is active).
+    @Published public var isFilterVisible: Bool = false
+    public var shouldShowFilter: Bool { isFilterVisible || !searchQuery.isEmpty }
+    /// Incremented by Cmd+Shift+G; the breadcrumb bar observes it and opens the path editor.
+    @Published public var pathEditRequest: Int = 0
+
+    public func toggleFilter() {
+        if shouldShowFilter {
+            isFilterVisible = false
+            searchQuery = ""
+        } else {
+            isFilterVisible = true
+        }
+    }
     @Published public var isLoading: Bool = false
     @Published public var errorMessage: String? = nil
     @Published public var isConnecting: Bool = false
@@ -42,8 +56,14 @@ public class PaneModel: ObservableObject, Identifiable {
     @Published public var remoteConnection: RemoteConnection? = nil
     @Published public var remotePath: String = "/"
     public var remotePassword: String? = nil
+    /// Connection of the last remote session, kept so Back/Forward can re-enter it after the
+    /// pane switched to a local location.
+    public private(set) var lastRemoteConnection: RemoteConnection? = nil
+    private var lastRemotePassword: String? = nil
 
     private var history: [URL] = []
+    /// Connection id per history entry (nil for local), so Back/Forward re-enter the right server.
+    private var historyConnections: [UUID?] = []
     private var historyIndex: Int = -1
 
     public var canGoBack: Bool {
@@ -73,6 +93,10 @@ public class PaneModel: ObservableObject, Identifiable {
     }
 
     public func connectRemote(connection: RemoteConnection, password: String? = nil) {
+        if isRemote, let previous = remoteConnection, previous.id != connection.id {
+            lastRemoteConnection = previous      // so Back can return to the previous server
+            lastRemotePassword = remotePassword
+        }
         self.isRemote = true
         self.remoteConnection = connection
         self.remotePassword = password ?? (connection.authType == .password ? KeychainService.shared.loadPassword(for: connection) : nil)
@@ -86,16 +110,26 @@ public class PaneModel: ObservableObject, Identifiable {
         self.selectionAnchorURL = nil
         self.focusedItemURL = nil
         self.searchQuery = ""
-        self.history = [virtualURL]
-        self.historyIndex = 0
+        appendHistory(virtualURL)
         self.isConnecting = true
         self.isLoading = true
         self.errorMessage = nil
         self.connectingMessage = "Connecting to '\(connection.displayTitle)'..."
+        BookmarkStore.shared.recordVisit(connectionID: connection.id, path: path)
         loadItems()
     }
 
     public func disconnectRemote() {
+        leaveRemoteMode()
+        navigateTo(FileManager.default.homeDirectoryForCurrentUser, addToHistory: true)
+    }
+
+    /// Switches the pane back to local browsing without navigating anywhere yet.
+    private func leaveRemoteMode() {
+        if let conn = remoteConnection {
+            lastRemoteConnection = conn
+            lastRemotePassword = remotePassword
+        }
         self.isRemote = false
         self.remoteConnection = nil
         self.remotePassword = nil
@@ -103,13 +137,27 @@ public class PaneModel: ObservableObject, Identifiable {
         self.isConnecting = false
         self.connectingMessage = ""
         self.errorMessage = nil
-        navigateTo(FileManager.default.homeDirectoryForCurrentUser, addToHistory: true)
+    }
+
+    private func appendHistory(_ url: URL) {
+        if historyIndex >= 0 && historyIndex < history.count - 1 {
+            history.removeSubrange((historyIndex + 1)..<history.count)
+            historyConnections.removeSubrange((historyIndex + 1)..<historyConnections.count)
+        }
+        history.append(url)
+        historyConnections.append(url.scheme == "sftp" ? remoteConnection?.id : nil)
+        historyIndex = history.count - 1
+    }
+
+    private func connectionID(forHistoryIndex index: Int) -> UUID? {
+        historyConnections.indices.contains(index) ? historyConnections[index] : nil
     }
 
     public func navigateToRemote(path: String, addToHistory: Bool = true) {
         guard let conn = remoteConnection else { return }
         let cleanPath = SFTPService.normalizeRemotePath(path)
         self.remotePath = cleanPath
+        BookmarkStore.shared.recordVisit(connectionID: conn.id, path: cleanPath)
         let virtualURL = SFTPService.sftpURL(host: conn.host, port: conn.port, path: cleanPath)
         self.currentURL = virtualURL
         self.items.removeAll() // Clear old directory items so they don't linger
@@ -122,27 +170,48 @@ public class PaneModel: ObservableObject, Identifiable {
         self.errorMessage = nil
 
         if addToHistory {
-            if historyIndex >= 0 && historyIndex < history.count - 1 {
-                history.removeSubrange((historyIndex + 1)..<history.count)
-            }
-            history.append(virtualURL)
-            historyIndex = history.count - 1
+            appendHistory(virtualURL)
         }
 
         loadItems()
     }
 
-    public func navigateTo(_ url: URL, addToHistory: Bool = true) {
-        if isRemote || url.scheme == "sftp" {
+    /// Returns false when the destination cannot be shown (e.g. a server session that is gone).
+    @discardableResult
+    public func navigateTo(_ url: URL, connectionID: UUID? = nil, addToHistory: Bool = true) -> Bool {
+        // The destination's scheme decides the mode. A sidebar favourite or a history entry is a
+        // file URL even while the pane shows a server, and must switch the pane back to local.
+        if url.scheme == "sftp" {
+            // History entries carry the exact connection; other callers (folder double-clicks,
+            // breadcrumbs) always target the session they were created in, so host/port is enough.
+            let matches = { (c: RemoteConnection?) -> Bool in
+                guard let c else { return false }
+                if let connectionID { return c.id == connectionID }
+                return c.host == url.host && (url.port ?? 22) == c.port
+            }
+            if !(isRemote && matches(remoteConnection)) {
+                // Not the server we are on: re-enter the previous session if it is that one, else ignore.
+                guard matches(lastRemoteConnection), let conn = lastRemoteConnection else { return false }
+                let previous = isRemote ? remoteConnection : nil
+                let previousPassword = remotePassword
+                isRemote = true
+                remoteConnection = conn
+                remotePassword = lastRemotePassword
+                if let previous { lastRemoteConnection = previous; lastRemotePassword = previousPassword }
+            }
             let path = url.path.isEmpty ? "/" : url.path
             navigateToRemote(path: path.precomposedStringWithCanonicalMapping, addToHistory: addToHistory)
-            return
+            return true
         }
+        guard url.isFileURL else { return false }
 
         let targetURL = url.standardized
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: targetURL.path, isDirectory: &isDir), isDir.boolValue else {
-            return
+            return false
+        }
+        if isRemote {
+            leaveRemoteMode()
         }
 
         self.currentURL = targetURL
@@ -153,28 +222,28 @@ public class PaneModel: ObservableObject, Identifiable {
         self.searchQuery = ""
 
         if addToHistory {
-            if historyIndex >= 0 && historyIndex < history.count - 1 {
-                history.removeSubrange((historyIndex + 1)..<history.count)
-            }
-            history.append(targetURL)
-            historyIndex = history.count - 1
+            appendHistory(targetURL)
         }
 
         loadItems()
+        return true
     }
 
-    public func goBack() {
-        guard canGoBack else { return }
-        historyIndex -= 1
-        let prevURL = history[historyIndex]
-        navigateTo(prevURL, addToHistory: false)
-    }
+    public func goBack() { step(-1) }
+    public func goForward() { step(+1) }
 
-    public func goForward() {
-        guard canGoForward else { return }
-        historyIndex += 1
-        let nextURL = history[historyIndex]
-        navigateTo(nextURL, addToHistory: false)
+    /// Walks the history in one direction until an entry can be shown. Entries that cannot be
+    /// shown right now (a deleted folder, a server session that is not re-enterable from here)
+    /// are stepped over but kept: a session may become reachable again later.
+    private func step(_ direction: Int) {
+        var target = historyIndex + direction
+        while history.indices.contains(target) {
+            if navigateTo(history[target], connectionID: connectionID(forHistoryIndex: target), addToHistory: false) {
+                historyIndex = target
+                return
+            }
+            target += direction
+        }
     }
 
     public func goUp() {

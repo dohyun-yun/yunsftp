@@ -15,41 +15,65 @@ public struct FilePaneView: View {
     var onTrashItems: ([FileItem]) -> Void
     var onCompressItems: ([FileItem]) -> Void
     var onExtractArchive: (FileItem) -> Void
+    var onConnect: (() -> Void)? = nil
+    var stack: PaneStack? = nil
 
     @State private var isDropTarget: Bool = false
+    @AppStorage("yunsftp_welcomeDismissed") private var welcomeDismissed: Bool = false
+    @ObservedObject private var connectionManager = ConnectionManager.shared
+    @FocusState private var isFilterFocused: Bool
 
     public var body: some View {
         VStack(spacing: 0) {
+            if let stack, stack.tabs.count > 1 {
+                PaneTabBar(stack: stack, onActivate: onActivate)
+                Divider()
+            }
+
             // Path Bar
             PathBreadcrumbBar(pane: pane)
                 .onTapGesture { onActivate() }
 
             // Pane Control Bar (Filter, View Modes, Hidden Files)
             HStack(spacing: 8) {
-                // Search Field
-                HStack(spacing: 4) {
+                // Filter toggle; the field itself appears only on demand (Cmd+F)
+                Button(action: {
+                    onActivate()
+                    pane.toggleFilter()
+                }) {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                        .font(.system(size: 11))
-                    TextField("Filter...", text: $pane.searchQuery)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 11))
-                        .onTapGesture { onActivate() }
-                    if !pane.searchQuery.isEmpty {
-                        Button(action: { pane.searchQuery = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                        .font(.subheadline)
+                        .foregroundColor(pane.shouldShowFilter ? .accentColor : .secondary)
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(Color(NSColor.textBackgroundColor))
-                .cornerRadius(5)
-                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.2), lineWidth: 0.5))
-                .frame(maxWidth: 180)
+                .buttonStyle(.plain)
+                .help(L("Filter this folder (Cmd+F)"))
+                .accessibilityLabel(L("Filter"))
+
+                if pane.shouldShowFilter {
+                    HStack(spacing: 4) {
+                        TextField(L("Filter..."), text: $pane.searchQuery)
+                            .textFieldStyle(.plain)
+                            .font(.subheadline)
+                            .focused($isFilterFocused)
+                            .onTapGesture { onActivate() }
+                            .onExitCommand { pane.toggleFilter() }
+                        if !pane.searchQuery.isEmpty {
+                            Button(action: { pane.searchQuery = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(5)
+                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.2), lineWidth: 0.5))
+                    .frame(maxWidth: 180)
+                    .onAppear { isFilterFocused = true }
+                }
 
                 Spacer()
 
@@ -68,11 +92,11 @@ public struct FilePaneView: View {
                     pane.showHiddenFiles.toggle()
                 }) {
                     Image(systemName: pane.showHiddenFiles ? "eye.fill" : "eye.slash")
-                        .font(.system(size: 11))
+                        .font(.subheadline)
                         .foregroundColor(pane.showHiddenFiles ? .accentColor : .secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Toggle Hidden Files (Cmd+Shift+.)")
+                .help(L("Toggle Hidden Files (Cmd+Shift+.)"))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -81,19 +105,28 @@ public struct FilePaneView: View {
 
             Divider()
 
+            if WelcomeBanner.shouldShow(connectionsEmpty: connectionManager.connections.isEmpty, dismissed: welcomeDismissed, isRemote: pane.isRemote, isActive: isActive) {
+                WelcomeBanner(
+                    onConnect: { onConnect?() },
+                    onImport: { _ = connectionManager.importFromSSHConfig() },
+                    onDismiss: { welcomeDismissed = true }
+                )
+                Divider()
+            }
+
             if let error = pane.errorMessage, !pane.items.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11))
+                        .font(.subheadline)
                         .foregroundColor(.orange)
                     Text(error)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundColor(.primary)
                         .lineLimit(2)
                     Spacer()
                     Button(action: { pane.errorMessage = nil }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 11))
+                            .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -115,7 +148,7 @@ public struct FilePaneView: View {
                         ProgressView()
                             .scaleEffect(1.2)
                         Text(pane.isRemote ? "Fetching remote file list..." : "Loading...")
-                            .font(.system(size: 13))
+                            .font(.body)
                             .foregroundColor(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -167,13 +200,13 @@ public struct FilePaneView: View {
             // Pane Footer Status Bar
             HStack {
                 Text(pane.statusDescription)
-                    .font(.system(size: 10))
+                    .font(.caption)
                     .foregroundColor(.secondary)
 
                 Spacer()
 
                 Text(pane.freeDiskSpaceDescription)
-                    .font(.system(size: 10))
+                    .font(.caption)
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 8)
@@ -197,6 +230,50 @@ public struct FilePaneView: View {
     }
 }
 
+/// First-run hint shown in the active local pane until a server exists or it is dismissed.
+public struct WelcomeBanner: View {
+    var onConnect: () -> Void
+    var onImport: () -> Void
+    var onDismiss: () -> Void
+
+    public static func shouldShow(connectionsEmpty: Bool, dismissed: Bool, isRemote: Bool, isActive: Bool) -> Bool {
+        return connectionsEmpty && !dismissed && !isRemote && isActive
+    }
+
+    private var hasSSHConfig: Bool { FileManager.default.fileExists(atPath: SSHConfigImporter.userConfigURL.path) }
+
+    public var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "server.rack")
+                .font(.title3)
+                .foregroundColor(.accentColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L("Add your first server"))
+                    .font(.subheadline.weight(.semibold))
+                Text("Press ⌘K to add a connection\(hasSSHConfig ? ", or import the hosts from ~/.ssh/config." : ".") Drag files between the two panes or press F5 to copy.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            if hasSSHConfig {
+                Button(L("Import from ssh config"), action: onImport)
+                    .controlSize(.small)
+            }
+            Button(L("Connect…"), action: onConnect)
+                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L("Dismiss"))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.accentColor.opacity(0.08))
+    }
+}
+
 public struct RemoteConnectingView: View {
     @ObservedObject var pane: PaneModel
     var onCancel: () -> Void
@@ -216,17 +293,17 @@ public struct RemoteConnectingView: View {
 
             VStack(spacing: 6) {
                 Text(pane.connectingMessage.isEmpty ? "Connecting to SFTP server..." : pane.connectingMessage)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundColor(.primary)
 
                 if let conn = pane.remoteConnection {
                     Text(verbatim: "\(conn.formattedHostPort) (path: \(pane.remotePath))")
-                        .font(.system(size: 11))
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
 
-                Text("Initializing SFTP session and fetching the file list...")
-                    .font(.system(size: 11))
+                Text(L("Initializing SFTP session and fetching the file list..."))
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
             }
 
@@ -237,9 +314,9 @@ public struct RemoteConnectingView: View {
             Button(action: onCancel) {
                 HStack(spacing: 4) {
                     Image(systemName: "xmark.circle")
-                    Text("Cancel Connection")
+                    Text(L("Cancel Connection"))
                 }
-                .font(.system(size: 12))
+                .font(.callout)
             }
             .buttonStyle(.bordered)
             .controlSize(.regular)
@@ -265,24 +342,24 @@ public struct RemoteErrorView: View {
 
             VStack(spacing: 6) {
                 Text(pane.isRemote ? "Remote connection failed" : "Could not open folder")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.title3.weight(.bold))
 
                 Text(error)
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
 
             HStack(spacing: 10) {
-                Button("Retry") {
+                Button(L("Retry")) {
                     pane.reload()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
 
                 if pane.isRemote {
-                    Button("Back to Local") {
+                    Button(L("Back to Local")) {
                         pane.disconnectRemote()
                     }
                     .buttonStyle(.bordered)

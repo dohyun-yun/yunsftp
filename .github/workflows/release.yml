@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    # Step-level `if:` may not read `secrets`; only presence flags live at job level, the
+    # secret values stay scoped to the two steps that need them.
+    env:
+      HAS_CERT: ${{ secrets.MACOS_CERT_P12 != '' }}
+      HAS_NOTARY: ${{ secrets.NOTARY_KEY_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync Info.plist version with tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GITHUB_RUN_NUMBER" Resources/Info.plist
+
+      - name: Test
+        run: swift test
+
+      # Optional: Developer ID signing. Runs only when the secrets are configured.
+      - name: Import signing certificate
+        if: ${{ env.HAS_CERT == 'true' }}
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          echo "$MACOS_CERT_P12" | base64 --decode > cert.p12
+          security create-keychain -p ci build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci build.keychain
+          security import cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain
+          echo "SIGN_IDENTITY=$(security find-identity -v -p codesigning build.keychain | awk -F'"' 'NR==1{print $2}')" >> "$GITHUB_ENV"
+
+      - name: Build and package
+        env:
+          SIGN_IDENTITY: ${{ env.SIGN_IDENTITY }}
+        run: ./scripts/package_release.sh
+
+      - name: Notarize
+        if: ${{ env.SIGN_IDENTITY != '' && env.HAS_NOTARY == 'true' }}
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          echo "$NOTARY_KEY_P8" > notary.p8
+          DMG=$(ls build/yunsftp-*.dmg)
+          xcrun notarytool submit "$DMG" --key notary.p8 --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
+          xcrun stapler staple "$DMG"
+          (cd build && shasum -a 256 yunsftp-*.dmg yunsftp-*.zip > checksums.txt)
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            build/yunsftp-*.dmg
+            build/yunsftp-*.zip
+            build/checksums.txt

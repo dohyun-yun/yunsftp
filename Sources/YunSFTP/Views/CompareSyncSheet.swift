@@ -49,7 +49,7 @@ public struct CompareSyncSheet: View {
                         Text("Status").frame(width: 110, alignment: .leading)
                         Spacer()
                     }
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.subheadline.weight(.bold))
                     .foregroundColor(.secondary)
                     .padding(6)
                     .background(Color(NSColor.controlBackgroundColor))
@@ -59,16 +59,16 @@ public struct CompareSyncSheet: View {
                     List(comparisonResults) { res in
                         HStack {
                             Text(res.name)
-                                .font(.system(size: 11))
+                                .font(.subheadline)
                                 .frame(width: 200, alignment: .leading)
                                 .lineLimit(1)
 
                             Text(res.leftItem?.formattedSize ?? "--")
-                                .font(.system(size: 11))
+                                .font(.subheadline)
                                 .frame(width: 110, alignment: .leading)
 
                             Text(res.rightItem?.formattedSize ?? "--")
-                                .font(.system(size: 11))
+                                .font(.subheadline)
                                 .frame(width: 110, alignment: .leading)
 
                             statusBadge(res.status)
@@ -120,23 +120,23 @@ public struct CompareSyncSheet: View {
         switch status {
         case .identical:
             Text("Identical")
-                .font(.system(size: 10, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundColor(.secondary)
         case .leftOnly:
             Text("Left Only")
-                .font(.system(size: 10, weight: .bold))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.blue)
         case .rightOnly:
             Text("Right Only")
-                .font(.system(size: 10, weight: .bold))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.orange)
         case .differentSize:
             Text("Diff Size")
-                .font(.system(size: 10, weight: .bold))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.red)
         case .differentDate:
             Text("Diff Date")
-                .font(.system(size: 10, weight: .bold))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.purple)
         }
     }

@@ -2,21 +2,27 @@ import SwiftUI
 import AppKit
 
 public struct MainWindowView: View {
-    @StateObject private var leftPane: PaneModel
-    @StateObject private var rightPane: PaneModel
+    @StateObject private var leftStack: PaneStack
+    @StateObject private var rightStack: PaneStack
 
-    @State private var activePaneId: UUID
+    @State private var activeSide: PaneSide = .left
     @State private var isDualPane: Bool = true
     @State private var customFavorites: [FavoriteLocation]
 
     public init(leftPane: PaneModel? = nil, rightPane: PaneModel? = nil, customFavorites: [FavoriteLocation]? = nil) {
         let lp = leftPane ?? PaneModel()
         let rp = rightPane ?? PaneModel(initialURL: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads"))
-        _leftPane = StateObject(wrappedValue: lp)
-        _rightPane = StateObject(wrappedValue: rp)
-        _activePaneId = State(initialValue: lp.id)
+        _leftStack = StateObject(wrappedValue: PaneStack(initial: lp))
+        _rightStack = StateObject(wrappedValue: PaneStack(initial: rp))
         _customFavorites = State(initialValue: customFavorites ?? [])
     }
+
+    /// The selected tab of each side; everything below works on these.
+    private var leftPane: PaneModel { leftStack.current }
+    private var rightPane: PaneModel { rightStack.current }
+    private var activeStack: PaneStack { activeSide == .right && isDualPane ? rightStack : leftStack }
+
+    @Environment(\.undoManager) private var undoManager
 
     // Sheet states
     @State private var previewItem: FileItem? = nil
@@ -30,9 +36,10 @@ public struct MainWindowView: View {
     @State private var connectSheetAutoRunTest: Bool = false
     @State private var showCompareSyncSheet: Bool = false
     @State private var showBatchRenameSheet: Bool = false
+    @State private var showRemoteSearchSheet: Bool = false
 
     private var activePane: PaneModel {
-        if activePaneId == rightPane.id && isDualPane {
+        if activeSide == .right && isDualPane {
             return rightPane
         } else {
             return leftPane
@@ -40,7 +47,7 @@ public struct MainWindowView: View {
     }
 
     private var otherPane: PaneModel {
-        if activePaneId == rightPane.id && isDualPane {
+        if activeSide == .right && isDualPane {
             return leftPane
         } else {
             return rightPane
@@ -52,10 +59,7 @@ public struct MainWindowView: View {
     }
 
     private var connectedConnectionIds: Set<UUID> {
-        var ids = Set<UUID>()
-        if leftPane.isRemote, let id = leftPane.remoteConnection?.id { ids.insert(id) }
-        if rightPane.isRemote, let id = rightPane.remoteConnection?.id { ids.insert(id) }
-        return ids
+        leftStack.connectedConnectionIDs.union(rightStack.connectedConnectionIDs)
     }
 
     public var body: some View {
@@ -94,19 +98,22 @@ public struct MainWindowView: View {
                     connectSheetIsEditMode = false
                     connectSheetAutoRunTest = false
                     showConnectSheet = true
+                },
+                onOpenRemotePath: { conn, path in
+                    openRemotePath(conn, path: path)
                 }
             )
-            .navigationSplitViewColumnWidth(min: 160, ideal: 190, max: 260)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 340)
         } detail: {
             VStack(spacing: 0) {
                 // Top Transfer Progress & Status Banner
                 TransferStatusBarView()
 
                 DualPaneView(
-                    leftPane: leftPane,
-                    rightPane: rightPane,
+                    leftStack: leftStack,
+                    rightStack: rightStack,
                     isDualPane: $isDualPane,
-                    activePaneId: $activePaneId,
+                    activeSide: $activeSide,
                     onOpenItem: { item in
                         if activePane.isRemote {
                             downloadAndOpenRemoteItem(item)
@@ -140,65 +147,79 @@ public struct MainWindowView: View {
                     },
                     onExtractArchive: { item in
                         extractArchive(item)
+                    },
+                    onConnect: {
+                        connectSheetInitialConn = nil
+                        showConnectSheet = true
                     }
                 )
             }
-            .toolbar {
-                ToolbarItemGroup(placement: .automatic) {
-                    ToolbarView(
-                        isDualPane: $isDualPane,
-                        onToggleDualPane: {
-                            isDualPane.toggle()
-                            if !isDualPane {
-                                activePaneId = leftPane.id
-                            }
-                        },
-                        onConnect: {
-                            connectSheetInitialConn = nil
-                            showConnectSheet = true
-                        },
-                        onCopyToOtherPane: { copySelectedToOtherPane() },
-                        onMoveToOtherPane: { moveSelectedToOtherPane() },
-                        onRefresh: { activePane.reload() },
-                        onNewFolder: {
-                            showNewFolderPrompt = true
-                        },
-                        onDelete: {
-                            trashItems(activePane.effectiveSelectedItems)
-                        },
-                        onChmod: {
-                            if let first = activePane.firstSelectedItem {
-                                chmodItem = first
-                            }
-                        },
-                        onQuickLook: {
-                            if let first = activePane.firstSelectedItem {
-                                previewItem = first
-                            }
-                        },
-                        onBatchRename: {
-                            if !activePane.effectiveSelectedItems.isEmpty {
-                                showBatchRenameSheet = true
-                            }
-                        },
-                        onCompareSync: {
-                            showCompareSyncSheet = true
-                        },
-                        onOpenTerminal: {
-                            TerminalService.openInTerminal(at: activePane.currentURL)
-                        },
-                        onGetInfo: {
-                            if let first = activePane.firstSelectedItem {
-                                infoItem = first
-                            }
+            .toolbar(id: "yunsftp.main") {
+                ToolbarView(
+                    isDualPane: $isDualPane,
+                    onToggleDualPane: {
+                        isDualPane.toggle()
+                        if !isDualPane {
+                            activeSide = .left
                         }
-                    )
-                }
+                    },
+                    onConnect: {
+                        connectSheetInitialConn = nil
+                        showConnectSheet = true
+                    },
+                    onCopyToOtherPane: { copySelectedToOtherPane() },
+                    onMoveToOtherPane: { moveSelectedToOtherPane() },
+                    onRefresh: { activePane.reload() },
+                    onNewFolder: {
+                        showNewFolderPrompt = true
+                    },
+                    onDelete: {
+                        trashItems(activePane.effectiveSelectedItems)
+                    },
+                    onChmod: {
+                        if let first = activePane.firstSelectedItem {
+                            chmodItem = first
+                        }
+                    },
+                    onQuickLook: {
+                        if let first = activePane.firstSelectedItem {
+                            previewItem = first
+                        }
+                    },
+                    onBatchRename: {
+                        if !activePane.effectiveSelectedItems.isEmpty {
+                            showBatchRenameSheet = true
+                        }
+                    },
+                    onCompareSync: {
+                        showCompareSyncSheet = true
+                    },
+                    onOpenTerminal: {
+                        TerminalService.openInTerminal(at: activePane.currentURL)
+                    },
+                    onGetInfo: {
+                        if let first = activePane.firstSelectedItem {
+                            infoItem = first
+                        }
+                    },
+                    onFindOnServer: {
+                        if activePane.isRemote { showRemoteSearchSheet = true }
+                    }
+                )
             }
         }
         .frame(minWidth: 800, minHeight: 520)
         .onAppear {
-            activePaneId = leftPane.id
+            let left = leftStack, right = rightStack
+            TransferCoordinator.shared.localMoveRecorder = { [undoManager] actionName, moves in
+                LocalUndo.register(undoManager, actionName: actionName) {
+                    for m in moves.reversed() {
+                        _ = try await FileSystemService.shared.move(urls: [m.to], to: m.from.deletingLastPathComponent())
+                    }
+                    await MainActor.run { left.current.reload(); right.current.reload() }
+                }
+            }
+            activeSide = .left
             if !DemoHelper.isDemoMode {
                 // Load and migrate ForkLift 2 favorites
                 let result = MigrationService.shared.migrateFromForkLift2()
@@ -214,7 +235,7 @@ public struct MainWindowView: View {
             FilePreviewSheet(item: item, pane: activePane)
         }
         .sheet(item: $infoItem) { item in
-            FileInfoSheet(item: item)
+            FileInfoSheet(item: item, pane: activePane)
         }
         .sheet(item: $chmodItem) { item in
             ChmodSheet(item: item) { mode, recursive in
@@ -232,6 +253,18 @@ public struct MainWindowView: View {
         }
         .sheet(isPresented: $showCompareSyncSheet) {
             CompareSyncSheet(leftPane: leftPane, rightPane: rightPane)
+        }
+        .sheet(isPresented: $showRemoteSearchSheet) {
+            RemoteSearchSheet(pane: activePane) { found in
+                let parent = (found.remotePath as NSString).deletingLastPathComponent
+                let pane = activePane
+                pane.navigateToRemote(path: parent.isEmpty ? "/" : parent)
+                if let conn = pane.remoteConnection {
+                    let url = SFTPService.sftpURL(host: conn.host, port: conn.port, path: found.remotePath)
+                    pane.selectedItemURLs = [url]
+                    pane.focusedItemURL = url
+                }
+            }
         }
         .sheet(isPresented: $showBatchRenameSheet) {
             BatchRenameSheet(items: activePane.effectiveSelectedItems, pane: activePane) {
@@ -254,15 +287,19 @@ public struct MainWindowView: View {
                 isEnabled: !hasActiveModal,
                 onTab: {
                     if isDualPane {
-                        activePaneId = (activePaneId == leftPane.id) ? rightPane.id : leftPane.id
+                        activeSide = (activeSide == .left) ? .right : .left
                     }
                 },
                 onSpace: {
                     activePane.toggleSelectionAtFocus()
                 },
                 onEscape: {
-                    leftPane.clearSelection()
-                    rightPane.clearSelection()
+                    if activePane.shouldShowFilter {
+                        activePane.toggleFilter()
+                    } else {
+                        leftPane.clearSelection()
+                        rightPane.clearSelection()
+                    }
                 },
                 onQuickLook: {
                     if let first = activePane.firstSelectedItem {
@@ -327,6 +364,20 @@ public struct MainWindowView: View {
                 onToggleHidden: {
                     activePane.showHiddenFiles.toggle()
                 },
+                onToggleFilter: {
+                    activePane.toggleFilter()
+                },
+                onGoToPath: {
+                    activePane.pathEditRequest += 1
+                },
+                onFindOnServer: {
+                    if activePane.isRemote { showRemoteSearchSheet = true }
+                },
+                onNewTab: { activeStack.newTab() },
+                onCloseTab: { activeStack.closeCurrent() },
+                onNextTab: { activeStack.selectNext() },
+                onPreviousTab: { activeStack.selectPrevious() },
+                canCloseTab: { activeStack.tabs.count > 1 },
                 onTypeChar: { char in activePane.selectMatchingPrefix(char) }
             )
         )
@@ -396,7 +447,12 @@ public struct MainWindowView: View {
             Task {
                 do {
                     let newURL = try await FileSystemService.shared.rename(url: item.url, to: newName)
+                    let oldName = item.name
                     await MainActor.run {
+                        LocalUndo.register(undoManager, actionName: "Rename") {
+                            _ = try await FileSystemService.shared.rename(url: newURL, to: oldName)
+                            await MainActor.run { targetPane.reload() }
+                        }
                         targetPane.selectedItemURLs = [newURL]
                         targetPane.focusedItemURL = newURL
                         targetPane.reload()
@@ -483,26 +539,37 @@ public struct MainWindowView: View {
         }
     }
 
+    /// Bookmark / recent folder: navigate if already on that server, otherwise connect straight there.
+    private func openRemotePath(_ conn: RemoteConnection, path: String) {
+        if activePane.isRemote, activePane.remoteConnection?.id == conn.id {
+            activePane.navigateToRemote(path: path)
+            return
+        }
+        var target = conn
+        target.remotePath = path
+        let pwd = KeychainService.shared.loadPassword(for: conn)
+        if conn.authType == .password && (pwd == nil || pwd!.isEmpty) {
+            connectSheetInitialConn = target
+            connectSheetIsEditMode = false
+            connectSheetAutoRunTest = false
+            showConnectSheet = true
+        } else {
+            activePane.connectRemote(connection: target, password: pwd)
+        }
+    }
+
     private func downloadAndOpenRemoteItem(_ item: FileItem) {
         guard let conn = activePane.remoteConnection else { return }
         let pwd = activePane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("yunsftpPreview", isDirectory: true)
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let remotePath = SFTPService.normalizeRemotePath(item.url.path)
-        let taskId = TransferManager.shared.addTransfer(fileName: item.name, direction: .download, totalBytes: item.size)
-        TransferManager.shared.updateProgress(id: taskId, progress: 0.2, bytesTransferred: 0, totalBytes: item.size, message: "Downloading \(item.name)...")
-
-        Task {
-            do {
-                let localURL = try await SFTPService.shared.download(remotePath: remotePath, to: tempDir, connection: conn, password: pwd, overwrite: true)
-                TransferManager.shared.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Done")
-                TransferManager.shared.markCompleted(id: taskId)
-                await MainActor.run {
-                    TerminalService.openItem(url: localURL)
-                }
-            } catch {
-                TransferManager.shared.markFailed(id: taskId, error: error.localizedDescription)
-            }
+        let size = item.size
+        let name = item.name
+        TransferCoordinator.shared.runAdHoc(fileName: name, direction: .download, totalBytes: size) { taskID in
+            await TransferManager.shared.updateProgress(id: taskID, progress: 0.2, bytesTransferred: 0, totalBytes: size, message: "Downloading \(name)...")
+            let localURL = try await SFTPService.shared.download(remotePath: remotePath, to: tempDir, connection: conn, password: pwd, overwrite: true)
+            await MainActor.run { TerminalService.openItem(url: localURL) }
         }
     }
 
@@ -521,351 +588,31 @@ public struct MainWindowView: View {
     }
 
     private func copySelectedToOtherPane() {
-        guard isDualPane else { return }
-        let selected = activePane.effectiveSelectedItems
-        guard !selected.isEmpty else { return }
-
-        let transferManager = TransferManager.shared
-
-        // Case 1: Active is Remote, Other is Local -> SFTP Download
-        if activePane.isRemote && !otherPane.isRemote {
-            guard let conn = activePane.remoteConnection else { return }
-            let pwd = activePane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
-            let dest = otherPane.currentURL
-            Task {
-                let batchStart = TransferManager.shared.beginBatch()
-                for item in selected {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                    let cleanFileName = SFTPService.decodeLsEscapes(item.name).precomposedStringWithCanonicalMapping
-                    let remotePath = SFTPService.normalizeRemotePath(item.url.path)
-                    let destFileURL = FileSystemService.plannedDestinationURL(fileName: cleanFileName, in: dest)
-
-                    let taskId = transferManager.addTransfer(fileName: cleanFileName, direction: .download, totalBytes: item.size)
-
-                    let monitor = Task {
-                        while !Task.isCancelled {
-                            try? await Task.sleep(nanoseconds: 150_000_000)
-                            guard !Task.isCancelled else { break }
-                            if let attrs = try? FileManager.default.attributesOfItem(atPath: destFileURL.path),
-                               let currentBytes = attrs[.size] as? Int64 {
-                                guard !Task.isCancelled else { break }
-                                let progress = item.size > 0 ? min(0.98, max(0.01, Double(currentBytes) / Double(item.size))) : 0.5
-                                await MainActor.run {
-                                    guard !Task.isCancelled else { return }
-                                    transferManager.updateProgress(
-                                        id: taskId,
-                                        progress: progress,
-                                        bytesTransferred: currentBytes,
-                                        totalBytes: item.size,
-                                        message: "Downloading \(cleanFileName)..."
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    do {
-                        _ = try await SFTPService.shared.download(remotePath: remotePath, to: dest, connection: conn, password: pwd)
-                        monitor.cancel()
-                        await MainActor.run {
-                            transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Downloaded \(cleanFileName)")
-                            transferManager.markCompleted(id: taskId)
-                        }
-                    } catch {
-                        monitor.cancel()
-                        await MainActor.run {
-                            transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                        }
-                    }
-                }
-                await MainActor.run {
-                    otherPane.reload()
-                }
-            }
-            return
-        }
-
-        // Case 2: Active is Local, Other is Remote -> SFTP Upload
-        if !activePane.isRemote && otherPane.isRemote {
-            guard let conn = otherPane.remoteConnection else { return }
-            let pwd = otherPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
-            let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
-            Task {
-                let batchStart = TransferManager.shared.beginBatch()
-                for item in selected {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                    let taskId = transferManager.addTransfer(fileName: item.name, direction: .upload, totalBytes: item.size)
-                    await MainActor.run {
-                        transferManager.updateProgress(id: taskId, progress: 0.1, bytesTransferred: 0, totalBytes: item.size, message: "Uploading \(item.name)...")
-                    }
-                    do {
-                        try await SFTPService.shared.upload(localURL: item.url, to: destPath, connection: conn, password: pwd)
-                        await MainActor.run {
-                            transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Uploaded \(item.name)")
-                            transferManager.markCompleted(id: taskId)
-                        }
-                    } catch {
-                        await MainActor.run {
-                            transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                        }
-                    }
-                }
-                otherPane.reload()
-            }
-            return
-        }
-
-        // Case 3: Remote to Remote
-        if activePane.isRemote && otherPane.isRemote {
-            guard let srcConn = activePane.remoteConnection, let dstConn = otherPane.remoteConnection else { return }
-            let srcPwd = activePane.remotePassword ?? (srcConn.authType == .password ? KeychainService.shared.loadPassword(for: srcConn) : nil)
-            let dstPwd = otherPane.remotePassword ?? (dstConn.authType == .password ? KeychainService.shared.loadPassword(for: dstConn) : nil)
-            let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
-            Task {
-                let batchStart = TransferManager.shared.beginBatch()
-                for item in selected {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                    let taskId = transferManager.addTransfer(fileName: item.name, direction: .remoteCopy, totalBytes: item.size)
-                    let remoteSrc = SFTPService.normalizeRemotePath(item.url.path)
-                    await MainActor.run {
-                        transferManager.updateProgress(id: taskId, progress: 0.1, bytesTransferred: 0, totalBytes: item.size, message: "Transferring \(item.name)...")
-                    }
-                    do {
-                        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("yunsftpTransfer_\(UUID().uuidString)")
-                        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-                        let downloaded = try await SFTPService.shared.download(remotePath: remoteSrc, to: tempDir, connection: srcConn, password: srcPwd)
-                        try await SFTPService.shared.upload(localURL: downloaded, to: destPath, connection: dstConn, password: dstPwd)
-                        try? FileManager.default.removeItem(at: tempDir)
-                        await MainActor.run {
-                            transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Transferred \(item.name)")
-                            transferManager.markCompleted(id: taskId)
-                        }
-                    } catch {
-                        await MainActor.run {
-                            transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                        }
-                    }
-                }
-                otherPane.reload()
-            }
-            return
-        }
-
-        // Case 4: Local to Local
-        let dest = otherPane.currentURL
-
-        Task {
-            let batchStart = TransferManager.shared.beginBatch()
-            for item in selected {
-                if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                let taskId = transferManager.addTransfer(fileName: item.name, direction: .localCopy, totalBytes: item.size)
-                let destFileURL = FileSystemService.plannedDestinationURL(fileName: item.name, in: dest)
-
-                let monitor = Task {
-                    while !Task.isCancelled {
-                        try? await Task.sleep(nanoseconds: 100_000_000)
-                        guard !Task.isCancelled else { break }
-                        if let attrs = try? FileManager.default.attributesOfItem(atPath: destFileURL.path),
-                           let currentBytes = attrs[.size] as? Int64 {
-                            guard !Task.isCancelled else { break }
-                            let progress = item.size > 0 ? min(0.98, max(0.05, Double(currentBytes) / Double(item.size))) : 0.5
-                            await MainActor.run {
-                                guard !Task.isCancelled else { return }
-                                transferManager.updateProgress(
-                                    id: taskId,
-                                    progress: progress,
-                                    bytesTransferred: currentBytes,
-                                    totalBytes: item.size,
-                                    message: "Copying \(item.name)..."
-                                )
-                            }
-                        }
-                    }
-                }
-
-                do {
-                    try await FileSystemService.shared.copy(urls: [item.url], to: dest)
-                    monitor.cancel()
-                    await MainActor.run {
-                        transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Copied \(item.name)")
-                        transferManager.markCompleted(id: taskId)
-                    }
-                } catch {
-                    monitor.cancel()
-                    await MainActor.run {
-                        transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                    }
-                }
-            }
-            otherPane.reload()
-        }
+        transferSelection(mode: .copy)
     }
 
     private func moveSelectedToOtherPane() {
+        transferSelection(mode: .move)
+    }
+
+    private func transferSelection(mode: TransferMode) {
         guard isDualPane else { return }
         let selected = activePane.effectiveSelectedItems
-        guard !selected.isEmpty else { return }
-
-        let transferManager = TransferManager.shared
-
-        // Case 1: Active Remote -> Download and Remove
-        if activePane.isRemote && !otherPane.isRemote {
-            guard let conn = activePane.remoteConnection else { return }
-            let pwd = activePane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
-            let dest = otherPane.currentURL
-            Task {
-                let batchStart = TransferManager.shared.beginBatch()
-                for item in selected {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                    let taskId = transferManager.addTransfer(fileName: item.name, direction: .download, totalBytes: item.size)
-                    let remotePath = SFTPService.normalizeRemotePath(item.url.path)
-                    let destFileURL = FileSystemService.plannedDestinationURL(fileName: item.name, in: dest)
-
-                    let monitor = Task {
-                        while !Task.isCancelled {
-                            try? await Task.sleep(nanoseconds: 150_000_000)
-                            guard !Task.isCancelled else { break }
-                            if let attrs = try? FileManager.default.attributesOfItem(atPath: destFileURL.path),
-                               let currentBytes = attrs[.size] as? Int64 {
-                                guard !Task.isCancelled else { break }
-                                let progress = item.size > 0 ? min(0.98, max(0.01, Double(currentBytes) / Double(item.size))) : 0.5
-                                await MainActor.run {
-                                    guard !Task.isCancelled else { return }
-                                    transferManager.updateProgress(
-                                        id: taskId,
-                                        progress: progress,
-                                        bytesTransferred: currentBytes,
-                                        totalBytes: item.size,
-                                        message: "Moving \(item.name)..."
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    do {
-                        _ = try await SFTPService.shared.download(remotePath: remotePath, to: dest, connection: conn, password: pwd)
-                        monitor.cancel()
-                        try await SFTPService.shared.remove(remotePath: remotePath, isDirectory: item.isDirectory, connection: conn, password: pwd)
-                        await MainActor.run {
-                            transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Moved \(item.name)")
-                            transferManager.markCompleted(id: taskId)
-                        }
-                    } catch {
-                        monitor.cancel()
-                        await MainActor.run {
-                            transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                        }
-                    }
-                }
-                activePane.reload()
-                otherPane.reload()
-            }
-            return
-        }
-
-        // Case 2: Active Local -> Upload and Move to Trash
-        if !activePane.isRemote && otherPane.isRemote {
-            guard let conn = otherPane.remoteConnection else { return }
-            let pwd = otherPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
-            let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
-            Task {
-                let batchStart = TransferManager.shared.beginBatch()
-                for item in selected {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                    let taskId = transferManager.addTransfer(fileName: item.name, direction: .upload, totalBytes: item.size)
-                    await MainActor.run {
-                        transferManager.updateProgress(id: taskId, progress: 0.1, bytesTransferred: 0, totalBytes: item.size, message: "Moving \(item.name)...")
-                    }
-                    do {
-                        try await SFTPService.shared.upload(localURL: item.url, to: destPath, connection: conn, password: pwd)
-                        try await FileSystemService.shared.moveToTrash(urls: [item.url])
-                        await MainActor.run {
-                            transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Moved \(item.name)")
-                            transferManager.markCompleted(id: taskId)
-                        }
-                    } catch {
-                        await MainActor.run {
-                            transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                        }
-                    }
-                }
-                activePane.reload()
-                otherPane.reload()
-            }
-            return
-        }
-
-        // Case 3: Remote to Remote Move
-        if activePane.isRemote && otherPane.isRemote {
-            guard let srcConn = activePane.remoteConnection, let dstConn = otherPane.remoteConnection else { return }
-            let srcPwd = activePane.remotePassword ?? (srcConn.authType == .password ? KeychainService.shared.loadPassword(for: srcConn) : nil)
-            let dstPwd = otherPane.remotePassword ?? (dstConn.authType == .password ? KeychainService.shared.loadPassword(for: dstConn) : nil)
-            let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
-            Task {
-                let batchStart = TransferManager.shared.beginBatch()
-                for item in selected {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                    let taskId = transferManager.addTransfer(fileName: item.name, direction: .remoteCopy, totalBytes: item.size)
-                    let remoteSrc = SFTPService.normalizeRemotePath(item.url.path)
-                    await MainActor.run {
-                        transferManager.updateProgress(id: taskId, progress: 0.1, bytesTransferred: 0, totalBytes: item.size, message: "Moving \(item.name)...")
-                    }
-                    do {
-                        if srcConn.id == dstConn.id {
-                            let newDst = (destPath == "/" ? "/\(item.name)" : "\(destPath)/\(item.name)").precomposedStringWithCanonicalMapping
-                            try await SFTPService.shared.rename(remotePath: remoteSrc, to: newDst, connection: dstConn, password: dstPwd)
-                        } else {
-                            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("yunsftpTransfer_\(UUID().uuidString)")
-                            try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-                            let downloaded = try await SFTPService.shared.download(remotePath: remoteSrc, to: tempDir, connection: srcConn, password: srcPwd)
-                            try await SFTPService.shared.upload(localURL: downloaded, to: destPath, connection: dstConn, password: dstPwd)
-                            try? FileManager.default.removeItem(at: tempDir)
-                            try await SFTPService.shared.remove(remotePath: remoteSrc, isDirectory: item.isDirectory, connection: srcConn, password: srcPwd)
-                        }
-                        await MainActor.run {
-                            transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Moved \(item.name)")
-                            transferManager.markCompleted(id: taskId)
-                        }
-                    } catch {
-                        await MainActor.run {
-                            transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                        }
-                    }
-                }
-                activePane.reload()
-                otherPane.reload()
-            }
-            return
-        }
-
-        // Case 4: Local to Local Move
-        let dest = otherPane.currentURL
-
-        Task {
-            let batchStart = TransferManager.shared.beginBatch()
-            for item in selected {
-                if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                let taskId = transferManager.addTransfer(fileName: item.name, direction: .localMove, totalBytes: item.size)
-                transferManager.updateProgress(id: taskId, progress: 0.5, bytesTransferred: 0, totalBytes: item.size, message: "Moving \(item.name)...")
-                do {
-                    try await FileSystemService.shared.move(urls: [item.url], to: dest)
-                    transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Done")
-                    transferManager.markCompleted(id: taskId)
-                } catch {
-                    transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                }
-            }
-            activePane.reload()
-            otherPane.reload()
+        guard !selected.isEmpty,
+              let source = TransferLocation.from(pane: activePane),
+              let destination = TransferLocation.from(pane: otherPane) else { return }
+        let src = activePane, dst = otherPane
+        TransferCoordinator.shared.start(TransferRequest(items: selected, source: source, destination: destination, mode: mode)) {
+            if mode == .move { src.reload() }
+            dst.reload()
         }
     }
 
     static func remoteDeleteAlertText(itemNames: [String]) -> (title: String, message: String) {
         let title = itemNames.count == 1
-            ? "Delete \"\(itemNames[0])\" from the server?"
-            : "Delete \(itemNames.count) items from the server?"
-        return (title, "Remote files are removed permanently. This cannot be undone.")
+            ? L("Delete \"%@\" from the server?", itemNames[0])
+            : L("Delete %d items from the server?", itemNames.count)
+        return (title, L("Remote files are removed permanently. This cannot be undone."))
     }
 
     private static func confirmRemoteDelete(itemNames: [String]) -> Bool {
@@ -874,8 +621,8 @@ public struct MainWindowView: View {
         alert.alertStyle = .warning
         alert.messageText = text.title
         alert.informativeText = text.message
-        alert.addButton(withTitle: "Delete")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("Delete"))
+        alert.addButton(withTitle: L("Cancel"))
         return alert.runModal() == .alertFirstButtonReturn
     }
 
@@ -888,13 +635,13 @@ public struct MainWindowView: View {
         if targetPane.isRemote {
             guard let conn = targetPane.remoteConnection else { return }
             // Remote deletion is permanent (no trash), so unlike the local path it needs confirmation.
-            guard Self.confirmRemoteDelete(itemNames: targets.map { $0.name }) else { return }
+            if SettingsStore.shared.settings.confirmRemoteDelete {
+                guard Self.confirmRemoteDelete(itemNames: targets.map { $0.name }) else { return }
+            }
             let pwd = targetPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
             Task {
                 var hadError = false
-                let batchStart = TransferManager.shared.beginBatch()
                 for item in targets {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                     let remotePath = SFTPService.normalizeRemotePath(item.url.path)
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .remoteCopy, totalBytes: item.size)
                     await MainActor.run {
@@ -930,8 +677,12 @@ public struct MainWindowView: View {
         guard !urls.isEmpty else { return }
         Task {
             do {
-                try await FileSystemService.shared.moveToTrash(urls: urls)
+                let pairs = try await FileSystemService.shared.moveToTrash(urls: urls)
                 await MainActor.run {
+                    LocalUndo.register(undoManager, actionName: pairs.count == 1 ? "Move to Trash" : "Move \(pairs.count) Items to Trash") {
+                        for pair in pairs { try await FileSystemService.shared.restoreFromTrash(pair) }
+                        await MainActor.run { targetPane.reload() }
+                    }
                     let deletedSet = Set(urls)
                     targetPane.items.removeAll { deletedSet.contains($0.url) }
                     targetPane.selectedItemURLs.subtract(deletedSet)
@@ -1006,7 +757,7 @@ public struct RenameSheet: View {
                     Text("Rename Item")
                         .font(.headline)
                     Text("Original: \(initialName)")
-                        .font(.system(size: 11))
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
                         .textSelection(.enabled)
@@ -1016,7 +767,7 @@ public struct RenameSheet: View {
 
             HStack(spacing: 8) {
                 TextField("New Name", text: $newName)
-                    .font(.system(size: 13))
+                    .font(.body)
                     .textFieldStyle(.roundedBorder)
                     .focused($isNameFocused)
                     .onSubmit {
@@ -1027,7 +778,7 @@ public struct RenameSheet: View {
                     newName = initialName
                 }) {
                     Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 12))
+                        .font(.callout)
                 }
                 .buttonStyle(.borderless)
                 .help("Restore original filename")
@@ -1094,7 +845,7 @@ public struct NewFolderSheet: View {
             }
 
             TextField("Folder Name", text: $folderName)
-                .font(.system(size: 13))
+                .font(.body)
                 .textFieldStyle(.roundedBorder)
                 .focused($isFocused)
                 .onSubmit {
@@ -1167,6 +918,14 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
     var onGoBack: (() -> Void)? = nil
     var onGoForward: (() -> Void)? = nil
     var onToggleHidden: (() -> Void)? = nil
+    var onToggleFilter: (() -> Void)? = nil
+    var onGoToPath: (() -> Void)? = nil
+    var onFindOnServer: (() -> Void)? = nil
+    var onNewTab: (() -> Void)? = nil
+    var onCloseTab: (() -> Void)? = nil
+    var onNextTab: (() -> Void)? = nil
+    var onPreviousTab: (() -> Void)? = nil
+    var canCloseTab: (() -> Bool)? = nil
     let onTypeChar: (String) -> Void
 
     /// Testable helper verifying whether a key event should trigger file deletion (`Cmd+Backspace`, `Ctrl+Backspace`, or `Forward Delete`).
@@ -1235,6 +994,14 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
         view.onGoBack = onGoBack
         view.onGoForward = onGoForward
         view.onToggleHidden = onToggleHidden
+        view.onToggleFilter = onToggleFilter
+        view.onGoToPath = onGoToPath
+        view.onFindOnServer = onFindOnServer
+        view.onNewTab = onNewTab
+        view.onCloseTab = onCloseTab
+        view.onNextTab = onNextTab
+        view.onPreviousTab = onPreviousTab
+        view.canCloseTab = canCloseTab
         view.onTypeChar = onTypeChar
     }
 
@@ -1268,6 +1035,14 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
         var onGoBack: (() -> Void)?
         var onGoForward: (() -> Void)?
         var onToggleHidden: (() -> Void)?
+        var onToggleFilter: (() -> Void)?
+        var onGoToPath: (() -> Void)?
+        var onFindOnServer: (() -> Void)?
+        var onNewTab: (() -> Void)?
+        var onCloseTab: (() -> Void)?
+        var onNextTab: (() -> Void)?
+        var onPreviousTab: (() -> Void)?
+        var canCloseTab: (() -> Bool)?
         var onTypeChar: ((String) -> Void)?
         private var monitor: Any?
 
@@ -1346,6 +1121,44 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
                         DispatchQueue.main.async {
                             self.onNewFolder?()
                         }
+                        return nil
+                    }
+
+                    // Cmd + T (New Tab) - keyCode 17
+                    if (event.keyCode == 17 || charKey == "t") && isCmd && !isShift && !isCtrl {
+                        DispatchQueue.main.async { self.onNewTab?() }
+                        return nil
+                    }
+                    // Cmd + W (Close Tab) - keyCode 13; falls through to the window when only one tab is open
+                    if (event.keyCode == 13 || charKey == "w") && isCmd && !isShift && !isCtrl, let close = self.onCloseTab, self.canCloseTab?() == true {
+                        DispatchQueue.main.async { close() }
+                        return nil
+                    }
+                    // Cmd + Shift + ] / [ (Next / Previous Tab) - keyCodes 30 / 33
+                    if (event.keyCode == 30 || charKey == "]") && isCmd && isShift {
+                        DispatchQueue.main.async { self.onNextTab?() }
+                        return nil
+                    }
+                    if (event.keyCode == 33 || charKey == "[") && isCmd && isShift {
+                        DispatchQueue.main.async { self.onPreviousTab?() }
+                        return nil
+                    }
+
+                    // Cmd + Shift + F (Find on Server) - keyCode 3
+                    if (event.keyCode == 3 || charKey == "f") && isCmd && isShift && !isCtrl {
+                        DispatchQueue.main.async { self.onFindOnServer?() }
+                        return nil
+                    }
+
+                    // Cmd + F (Filter) - keyCode 3
+                    if (event.keyCode == 3 || charKey == "f") && isCmd && !isShift && !isCtrl {
+                        DispatchQueue.main.async { self.onToggleFilter?() }
+                        return nil
+                    }
+
+                    // Cmd + Shift + G (Go to Folder) - keyCode 5
+                    if (event.keyCode == 5 || charKey == "g") && isCmd && isShift {
+                        DispatchQueue.main.async { self.onGoToPath?() }
                         return nil
                     }
 

@@ -35,7 +35,7 @@ public struct PasswordPromptSheet: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     Text(verbatim: "\(connection.username.isEmpty ? "Server" : connection.username)@\(connection.formattedHostPort)")
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .font(.subheadline.monospaced().weight(.semibold))
                         .foregroundColor(.accentColor)
                 }
                 Spacer()
@@ -46,7 +46,7 @@ public struct PasswordPromptSheet: View {
             // Form
             VStack(alignment: .leading, spacing: 10) {
                 Text("Password:")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.subheadline.weight(.medium))
 
                 SecureField("Enter server password", text: $password)
                     .textFieldStyle(.roundedBorder)
@@ -56,7 +56,7 @@ public struct PasswordPromptSheet: View {
                     }
 
                 Toggle("Remember password in Keychain", isOn: $saveToKeychain)
-                    .font(.system(size: 11))
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
             }
 

@@ -1,10 +1,10 @@
 import SwiftUI
 
 public struct DualPaneView: View {
-    @ObservedObject var leftPane: PaneModel
-    @ObservedObject var rightPane: PaneModel
+    @ObservedObject var leftStack: PaneStack
+    @ObservedObject var rightStack: PaneStack
     @Binding var isDualPane: Bool
-    @Binding var activePaneId: UUID
+    @Binding var activeSide: PaneSide
 
     var onOpenItem: (FileItem) -> Void
     var onShowInfo: (FileItem) -> Void
@@ -16,13 +16,14 @@ public struct DualPaneView: View {
     var onTrashItems: ([FileItem]) -> Void
     var onCompressItems: ([FileItem]) -> Void
     var onExtractArchive: (FileItem) -> Void
+    var onConnect: (() -> Void)? = nil
 
     public var body: some View {
         HSplitView {
             FilePaneView(
-                pane: leftPane,
-                isActive: activePaneId == leftPane.id,
-                onActivate: { activePaneId = leftPane.id },
+                pane: leftStack.current,
+                isActive: activeSide == .left || !isDualPane,
+                onActivate: { activeSide = .left },
                 onOpenItem: onOpenItem,
                 onShowInfo: onShowInfo,
                 onQuickLook: onQuickLook,
@@ -32,15 +33,18 @@ public struct DualPaneView: View {
                 onMoveToOtherPane: onMoveToOtherPane,
                 onTrashItems: onTrashItems,
                 onCompressItems: onCompressItems,
-                onExtractArchive: onExtractArchive
+                onExtractArchive: onExtractArchive,
+                onConnect: onConnect,
+                stack: leftStack
             )
+            .id(leftStack.current.id)
             .frame(minWidth: 280)
 
             if isDualPane {
                 FilePaneView(
-                    pane: rightPane,
-                    isActive: activePaneId == rightPane.id,
-                    onActivate: { activePaneId = rightPane.id },
+                    pane: rightStack.current,
+                    isActive: activeSide == .right,
+                    onActivate: { activeSide = .right },
                     onOpenItem: onOpenItem,
                     onShowInfo: onShowInfo,
                     onQuickLook: onQuickLook,
@@ -50,8 +54,11 @@ public struct DualPaneView: View {
                     onMoveToOtherPane: onMoveToOtherPane,
                     onTrashItems: onTrashItems,
                     onCompressItems: onCompressItems,
-                    onExtractArchive: onExtractArchive
+                    onExtractArchive: onExtractArchive,
+                    onConnect: onConnect,
+                    stack: rightStack
                 )
+                .id(rightStack.current.id)
                 .frame(minWidth: 280)
             }
         }

@@ -44,7 +44,7 @@ public struct FilePreviewSheet: View {
 
                 if pane?.isRemote == true {
                     Text("SFTP")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Color.green.opacity(0.15))
@@ -82,7 +82,7 @@ public struct FilePreviewSheet: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.orange)
                     Text(err)
-                        .font(.system(size: 11))
+                        .font(.subheadline)
                         .foregroundColor(.primary)
                     Spacer()
                 }
@@ -116,7 +116,7 @@ public struct FilePreviewSheet: View {
                     .background(Color(NSColor.controlBackgroundColor))
                 } else if isTextEditable {
                     TextEditor(text: $textContent)
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(.callout.monospaced())
                         .padding(6)
                         .onChange(of: textContent) { _ in
                             hasChanges = true

@@ -69,6 +69,31 @@ public class ConnectionManager: ObservableObject {
         return (addedConns, result.importedFavorites.count)
     }
 
+    /// Adds connections that are not already present (same host, port and user). Returns how many were added.
+    @discardableResult
+    public func importConnections(_ list: [RemoteConnection]) -> Int {
+        var added = 0
+        for conn in list {
+            let exists = connections.contains {
+                $0.host.caseInsensitiveCompare(conn.host) == .orderedSame && $0.port == conn.port && $0.username == conn.username
+            }
+            if !exists {
+                connections.append(conn)
+                added += 1
+            }
+        }
+        if added > 0 { saveConnections() }
+        return added
+    }
+
+    public func importFromSSHConfig() -> Int {
+        return importConnections(SSHConfigImporter.importFromUserConfig())
+    }
+
+    public func importFromCyberduck() -> Int {
+        return importConnections(CyberduckImporter.importFromDisk())
+    }
+
     public func addConnection(_ connection: RemoteConnection) {
         connections.append(connection)
         saveConnections()

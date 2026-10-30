@@ -51,3 +51,28 @@ final class DragDropManagerTests: XCTestCase {
         manager.endDrag()
     }
 }
+
+
+extension DragDropManagerTests {
+    func testOnlyOurOwnProvidersCarryTheSessionMarker() {
+        let ours = DragDropManager.shared.makeProvider(for: URL(fileURLWithPath: "/tmp/a.txt"))
+        let finder = NSItemProvider(object: URL(fileURLWithPath: "/tmp/a.txt") as NSURL)
+        XCTAssertTrue(DragDropManager.isInternalDrop(providers: [ours]))
+        XCTAssertFalse(DragDropManager.isInternalDrop(providers: [finder]), "same URL from Finder is external")
+        XCTAssertFalse(DragDropManager.isInternalDrop(providers: []))
+        XCTAssertTrue(ours.canLoadObject(ofClass: NSURL.self), "the file URL is still there for Finder")
+    }
+
+    @MainActor
+    func testInternalDropTransfersTheWholeSelectionAndStaleStateIsDropped() async throws {
+        // handleDrop with the marker must hand over all dragged items; without it the cache is cleared.
+        let manager = DragDropManager()
+        let pane = PaneModel(initialURL: FileManager.default.temporaryDirectory, autoLoad: false)
+        let items = ["a", "b", "c"].map { FileItem(url: URL(fileURLWithPath: "/tmp/\($0).txt")) }
+        manager.startDrag(items: items, from: pane)
+        XCTAssertEqual(manager.draggedItems.count, 3)
+        // A Finder drop (no marker) after an abandoned drag: the stale items must not be replayed.
+        manager.handleDrop(onto: pane, externalProviders: [NSItemProvider(object: URL(fileURLWithPath: "/tmp/other.txt") as NSURL)]) {}
+        XCTAssertTrue(manager.draggedItems.isEmpty)
+    }
+}

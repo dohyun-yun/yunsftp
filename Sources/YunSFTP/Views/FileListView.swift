@@ -21,6 +21,23 @@ public struct FileListView: View {
     @AppStorage("colWidth_date") private var dateWidth: Double = 135
     @AppStorage("colWidth_kind") private var kindWidth: Double = 95
     @AppStorage("colWidth_perms") private var permsWidth: Double = 65
+    @ObservedObject private var settingsStore = SettingsStore.shared
+
+    public struct ColumnVisibility: Equatable {
+        public var size: Bool
+        public var date: Bool
+        public var kind: Bool
+        public var perms: Bool
+    }
+
+    /// Which optional columns to draw: the user's choice, minus what cannot fit. Narrow panes drop
+    /// Permissions first, then Kind, so the name column never collapses.
+    public static func visibleColumns(paneWidth: Double, settings: AppSettings) -> ColumnVisibility {
+        var v = ColumnVisibility(size: settings.showSize, date: settings.showDateModified, kind: settings.showKind, perms: settings.showPermissions)
+        if paneWidth < 560 { v.perms = false }
+        if paneWidth < 460 { v.kind = false }
+        return v
+    }
 
     public static func totalColumnsWidth(
         nameWidth: Double,
@@ -105,7 +122,7 @@ public struct FileListView: View {
     }
 
     @ViewBuilder
-    private func tableHeaderBar(tableWidth: Double, nameColumnWidth: Double) -> some View {
+    private func tableHeaderBar(tableWidth: Double, nameColumnWidth: Double, columns: ColumnVisibility) -> some View {
         HStack(spacing: 0) {
             headerCell("Name", field: .name, alignment: .leading, width: nameColumnWidth)
             ColumnResizeDivider(
@@ -118,17 +135,22 @@ public struct FileListView: View {
                 defaultWidth: 220
             )
 
-            headerCell("Size", field: .size, alignment: .trailing, width: sizeWidth)
-            ColumnResizeDivider(width: $sizeWidth, minWidth: 50, maxWidth: 300, defaultWidth: 80)
-
-            headerCell("Date Modified", field: .date, alignment: .leading, width: dateWidth)
-            ColumnResizeDivider(width: $dateWidth, minWidth: 80, maxWidth: 350, defaultWidth: 135)
-
-            headerCell("Kind", field: .kind, alignment: .leading, width: kindWidth)
-            ColumnResizeDivider(width: $kindWidth, minWidth: 50, maxWidth: 300, defaultWidth: 95)
-
-            headerCell("Perms", field: nil, alignment: .center, width: permsWidth)
-            ColumnResizeDivider(width: $permsWidth, minWidth: 45, maxWidth: 200, defaultWidth: 65)
+            if columns.size {
+                headerCell("Size", field: .size, alignment: .trailing, width: sizeWidth)
+                ColumnResizeDivider(width: $sizeWidth, minWidth: 50, maxWidth: 300, defaultWidth: 80)
+            }
+            if columns.date {
+                headerCell("Date Modified", field: .date, alignment: .leading, width: dateWidth)
+                ColumnResizeDivider(width: $dateWidth, minWidth: 80, maxWidth: 350, defaultWidth: 135)
+            }
+            if columns.kind {
+                headerCell("Kind", field: .kind, alignment: .leading, width: kindWidth)
+                ColumnResizeDivider(width: $kindWidth, minWidth: 50, maxWidth: 300, defaultWidth: 95)
+            }
+            if columns.perms {
+                headerCell("Perms", field: nil, alignment: .center, width: permsWidth)
+                ColumnResizeDivider(width: $permsWidth, minWidth: 45, maxWidth: 200, defaultWidth: 65)
+            }
 
             Spacer(minLength: 0)
         }
@@ -139,52 +161,58 @@ public struct FileListView: View {
 
     public var body: some View {
         GeometryReader { geo in
+            let settings = settingsStore.settings
+            let columns = Self.visibleColumns(paneWidth: geo.size.width, settings: settings)
+            let sizeW = columns.size ? sizeWidth : 0
+            let dateW = columns.date ? dateWidth : 0
+            let kindW = columns.kind ? kindWidth : 0
+            let permsW = columns.perms ? permsWidth : 0
             let effectiveNameW = Self.effectiveNameColumnWidth(
                 paneWidth: geo.size.width,
                 nameWidth: nameWidth,
-                sizeWidth: sizeWidth,
-                dateWidth: dateWidth,
-                kindWidth: kindWidth,
-                permsWidth: permsWidth
+                sizeWidth: sizeW,
+                dateWidth: dateW,
+                kindWidth: kindW,
+                permsWidth: permsW
             )
             let colsWidth = Self.totalColumnsWidth(
                 nameWidth: effectiveNameW,
-                sizeWidth: sizeWidth,
-                dateWidth: dateWidth,
-                kindWidth: kindWidth,
-                permsWidth: permsWidth
+                sizeWidth: sizeW,
+                dateWidth: dateW,
+                kindWidth: kindW,
+                permsWidth: permsW
             )
             let tableWidth = max(geo.size.width, colsWidth)
 
             if pane.displayedItems.isEmpty {
                 ScrollView(.horizontal, showsIndicators: colsWidth > geo.size.width) {
                     VStack(spacing: 0) {
-                        tableHeaderBar(tableWidth: tableWidth, nameColumnWidth: effectiveNameW)
+                        tableHeaderBar(tableWidth: tableWidth, nameColumnWidth: effectiveNameW, columns: columns)
 
                         VStack(spacing: 12) {
                             Spacer()
                             if pane.isLoading {
                                 ProgressView()
                                     .scaleEffect(1.2)
-                                Text("Loading...")
-                                    .font(.system(size: 14))
+                                Text(L("Loading..."))
+                                    .font(.title3)
                                     .foregroundColor(.secondary)
                             } else if let error = pane.errorMessage {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .font(.system(size: 36))
                                     .foregroundColor(.orange)
                                 Text(error)
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(.body.weight(.medium))
                                     .foregroundColor(.primary)
                                     .multilineTextAlignment(.center)
                                     .padding(.horizontal, 24)
                                 if pane.isRemote {
-                                    Button("Disconnect") {
+                                    Button(L("Disconnect")) {
                                         pane.disconnectRemote()
                                     }
                                     .buttonStyle(.bordered)
                                 } else {
-                                    Button("Reload") {
+                                    Button(L("Reload")) {
                                         pane.reload()
                                     }
                                     .buttonStyle(.bordered)
@@ -193,9 +221,12 @@ public struct FileListView: View {
                                 Image(systemName: "folder")
                                     .font(.system(size: 40))
                                     .foregroundColor(.secondary.opacity(0.4))
-                                Text("Folder is Empty")
-                                    .font(.system(size: 14))
+                                Text(L("Folder is Empty"))
+                                    .font(.title3)
                                     .foregroundColor(.secondary)
+                                Text(pane.isRemote ? "Drop files here to upload, or press ⌘⇧N for a new folder." : "Drop files here, or press ⌘⇧N for a new folder.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary.opacity(0.8))
                             }
                             Spacer()
                         }
@@ -217,17 +248,19 @@ public struct FileListView: View {
             } else {
                 ScrollView([.horizontal, .vertical], showsIndicators: true) {
                     LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                        Section(header: tableHeaderBar(tableWidth: tableWidth, nameColumnWidth: effectiveNameW)) {
+                        Section(header: tableHeaderBar(tableWidth: tableWidth, nameColumnWidth: effectiveNameW, columns: columns)) {
                             ForEach(pane.displayedItems) { item in
                                 FileRowView(
                                     item: item,
                                     isSelected: pane.selectedItemURLs.contains(item.url),
                                     isFocused: pane.focusedItemURL == item.url,
                                     nameWidth: effectiveNameW,
-                                    sizeWidth: sizeWidth,
-                                    dateWidth: dateWidth,
-                                    kindWidth: kindWidth,
-                                    permsWidth: permsWidth,
+                                    sizeWidth: sizeW,
+                                    dateWidth: dateW,
+                                    kindWidth: kindW,
+                                    permsWidth: permsW,
+                                    fontSize: settings.fontSize,
+                                    relativeDates: settings.showRelativeDates,
                                     onActivate: onActivate,
                                     onSelect: { isShift, isCmd in
                                         onActivate()
@@ -244,6 +277,13 @@ public struct FileListView: View {
                                     onDragStart: {
                                         let itemsToDrag = pane.selectedItemURLs.contains(item.url) ? pane.selectedItems : [item]
                                         DragDropManager.shared.startDrag(items: itemsToDrag, from: pane)
+                                    },
+                                    dragProvider: {
+                                        if pane.isRemote, let conn = pane.remoteConnection {
+                                            let pwd = pane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
+                                            return RemoteDragProvider.make(item: item, connection: conn, password: pwd)
+                                        }
+                                        return DragDropManager.shared.makeProvider(for: item.url)
                                     },
                                     onDropOntoFolder: { providers in
                                         onActivate()
@@ -295,13 +335,13 @@ public struct FileListView: View {
             HStack(spacing: 4) {
                 if alignment == .trailing { Spacer(minLength: 0) }
                 Text(title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if let field = field, pane.sortField == field {
                     Image(systemName: pane.sortAscending ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9))
+                        .font(.caption2)
                         .foregroundColor(.accentColor)
                 }
                 if alignment != .trailing { Spacer(minLength: 0) }
@@ -327,7 +367,7 @@ public struct FileListView: View {
 
     @ViewBuilder
     private func contextMenuFor(item: FileItem) -> some View {
-        Button("Open (Cmd+O)") {
+        Button(L("Open (Cmd+O)")) {
             onActivate()
             if item.isDirectory {
                 pane.navigateTo(item.url)
@@ -336,18 +376,32 @@ public struct FileListView: View {
             }
         }
 
-        Button("Toggle Selection (Space)") {
+        if pane.isRemote && !item.isDirectory, let conn = pane.remoteConnection {
+            Button(L("Edit in External Editor")) {
+                onActivate()
+                let pwd = pane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
+                Task {
+                    do {
+                        try await RemoteEditService.shared.edit(item: item, connection: conn, password: pwd)
+                    } catch {
+                        pane.errorMessage = "Could not open for editing: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+
+        Button(L("Toggle Selection (Space)")) {
             onActivate()
             pane.focusedItemURL = item.url
             pane.toggleSelectionAtFocus()
         }
 
-        Button("Quick Look (Cmd+Y)") {
+        Button(L("Quick Look (Cmd+Y)")) {
             onActivate()
             onQuickLook(item)
         }
 
-        Button("Get Info (Cmd+I)") {
+        Button(L("Get Info (Cmd+I)")) {
             onActivate()
             onShowInfo(item)
         }
@@ -355,19 +409,19 @@ public struct FileListView: View {
         Divider()
 
         // Clipboard Copy / Cut / Paste
-        Button("Copy (Cmd+C)") {
+        Button(L("Copy (Cmd+C)")) {
             onActivate()
             let itemsToCopy = pane.selectedItemURLs.contains(item.url) ? pane.selectedItems : [item]
             ClipboardService.shared.copy(items: itemsToCopy, from: pane)
         }
 
-        Button("Cut (Cmd+X)") {
+        Button(L("Cut (Cmd+X)")) {
             onActivate()
             let itemsToCut = pane.selectedItemURLs.contains(item.url) ? pane.selectedItems : [item]
             ClipboardService.shared.cut(items: itemsToCut, from: pane)
         }
 
-        Button("Paste (Cmd+V)") {
+        Button(L("Paste (Cmd+V)")) {
             onActivate()
             ClipboardService.shared.paste(to: pane) {
                 pane.reload()
@@ -377,7 +431,7 @@ public struct FileListView: View {
 
         Divider()
 
-        Button("Copy to Other Pane (F5)") {
+        Button(L("Copy to Other Pane (F5)")) {
             onActivate()
             if !pane.selectedItemURLs.contains(item.url) {
                 pane.selectSingle(item.url)
@@ -385,7 +439,7 @@ public struct FileListView: View {
             onCopyToOtherPane()
         }
 
-        Button("Move to Other Pane (F6)") {
+        Button(L("Move to Other Pane (F6)")) {
             onActivate()
             if !pane.selectedItemURLs.contains(item.url) {
                 pane.selectSingle(item.url)
@@ -395,17 +449,17 @@ public struct FileListView: View {
 
         Divider()
 
-        Button("Permissions (chmod)...") {
+        Button(L("Permissions (chmod)...")) {
             onActivate()
             onChmod(item)
         }
 
-        Button("Rename (Enter)") {
+        Button(L("Rename (Enter)")) {
             onActivate()
             onRename(item)
         }
 
-        Button("Duplicate (Cmd+D)") {
+        Button(L("Duplicate (Cmd+D)")) {
             onActivate()
             if pane.isRemote, let conn = pane.remoteConnection {
                 let pwd = pane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
@@ -440,12 +494,12 @@ public struct FileListView: View {
 
         if !pane.isRemote {
             if item.fileExtension == "zip" {
-                Button("Extract Archive") {
+                Button(L("Extract Archive")) {
                     onActivate()
                     onExtractArchive(item)
                 }
             } else {
-                Button("Compress to Zip") {
+                Button(L("Compress to Zip")) {
                     onActivate()
                     onCompressItems([item])
                 }
@@ -454,23 +508,23 @@ public struct FileListView: View {
 
         Divider()
 
-        Button("Refresh (Cmd+R)") {
+        Button(L("Refresh (Cmd+R)")) {
             pane.reload()
         }
 
         if !pane.isRemote {
-            Button("Open in Terminal") {
+            Button(L("Open in Terminal")) {
                 TerminalService.openInTerminal(at: item.isDirectory ? item.url : pane.currentURL)
             }
 
-            Button("Reveal in Finder") {
+            Button(L("Reveal in Finder")) {
                 TerminalService.revealInFinder(url: item.url)
             }
         }
 
         Divider()
 
-        Button("Delete / Move to Trash (Cmd+Backspace)", role: .destructive) {
+        Button(L("Delete / Move to Trash (Cmd+Backspace)"), role: .destructive) {
             onActivate()
             let targets = pane.selectedItemURLs.contains(item.url) ? pane.selectedItems : [item]
             onTrashItems(targets)
@@ -487,10 +541,13 @@ public struct FileRowView: View {
     let dateWidth: Double
     let kindWidth: Double
     let permsWidth: Double
+    var fontSize: Double = 12
+    var relativeDates: Bool = false
     let onActivate: () -> Void
     let onSelect: (Bool, Bool) -> Void
     let onDoubleClick: () -> Void
     let onDragStart: () -> Void
+    var dragProvider: (() -> NSItemProvider)? = nil
     let onDropOntoFolder: ([NSItemProvider]) -> Void
     let onDropOntoPane: ([NSItemProvider]) -> Void
 
@@ -505,14 +562,14 @@ public struct FileRowView: View {
                     .frame(width: 16, height: 16)
 
                 Text(item.name)
-                    .font(.system(size: 12))
+                    .font(.system(size: fontSize))
                     .foregroundColor(isSelected ? .white : (item.isHidden ? .secondary : .primary))
                     .lineLimit(1)
                     .truncationMode(.middle)
 
                 if item.isSymlink {
                     Image(systemName: "arrowshape.turn.up.right.fill")
-                        .font(.system(size: 9))
+                        .font(.caption2)
                         .foregroundColor(.blue)
                 }
                 Spacer(minLength: 0)
@@ -523,57 +580,60 @@ public struct FileRowView: View {
 
             Color.clear.frame(width: 5)
 
-            // Size
-            HStack {
-                Spacer(minLength: 0)
-                Text(item.formattedSize)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 6)
-            .frame(width: sizeWidth, alignment: .trailing)
-            .clipped()
+            let secondarySize = max(9, fontSize - 1)
+            let secondaryColor: Color = isSelected ? .white.opacity(0.9) : .secondary
 
-            Color.clear.frame(width: 5)
-
-            // Date
-            HStack {
-                Text(item.formattedDate)
-                    .font(.system(size: 11))
-                    .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 6)
-            .frame(width: dateWidth, alignment: .leading)
-            .clipped()
-
-            Color.clear.frame(width: 5)
-
-            // Kind
-            HStack {
-                Text(item.kindDescription)
-                    .font(.system(size: 11))
-                    .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 6)
-            .frame(width: kindWidth, alignment: .leading)
-            .clipped()
-
-            Color.clear.frame(width: 5)
-
-            // Permissions
-            Text(item.posixPermissions)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary.opacity(0.8))
-                .lineLimit(1)
-                .frame(width: permsWidth, alignment: .center)
+            if sizeWidth > 0 {
+                HStack {
+                    Spacer(minLength: 0)
+                    Text(item.formattedSize)
+                        .font(.system(size: secondarySize, design: .monospaced))
+                        .foregroundColor(secondaryColor)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 6)
+                .frame(width: sizeWidth, alignment: .trailing)
                 .clipped()
+                Color.clear.frame(width: 5)
+            }
 
-            Color.clear.frame(width: 5)
+            if dateWidth > 0 {
+                HStack {
+                    Text(item.formattedDate(relative: relativeDates))
+                        .font(.system(size: secondarySize))
+                        .foregroundColor(secondaryColor)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 6)
+                .frame(width: dateWidth, alignment: .leading)
+                .clipped()
+                Color.clear.frame(width: 5)
+            }
+
+            if kindWidth > 0 {
+                HStack {
+                    Text(item.kindDescription)
+                        .font(.system(size: secondarySize))
+                        .foregroundColor(secondaryColor)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 6)
+                .frame(width: kindWidth, alignment: .leading)
+                .clipped()
+                Color.clear.frame(width: 5)
+            }
+
+            if permsWidth > 0 {
+                Text(item.posixPermissions)
+                    .font(.system(size: max(9, fontSize - 2), design: .monospaced))
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary.opacity(0.8))
+                    .lineLimit(1)
+                    .frame(width: permsWidth, alignment: .center)
+                    .clipped()
+                Color.clear.frame(width: 5)
+            }
 
             Spacer(minLength: 0)
         }
@@ -597,7 +657,7 @@ public struct FileRowView: View {
         .onDrag {
             onActivate()
             onDragStart()
-            return NSItemProvider(object: item.url as NSURL)
+            return dragProvider?() ?? DragDropManager.shared.makeProvider(for: item.url)
         }
         .onDrop(of: [.fileURL, .url, .text, .plainText], isTargeted: $isFolderDropTarget) { providers in
             onActivate()

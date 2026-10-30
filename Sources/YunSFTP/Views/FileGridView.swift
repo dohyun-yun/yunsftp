@@ -33,7 +33,7 @@ public struct FileGridView: View {
                             .shadow(radius: 1)
 
                         Text(item.name)
-                            .font(.system(size: 11))
+                            .font(.subheadline)
                             .lineLimit(2)
                             .multilineTextAlignment(.center)
                             .foregroundColor(isSelected ? .white : .primary)
@@ -52,7 +52,11 @@ public struct FileGridView: View {
                         onActivate()
                         let itemsToDrag = pane.selectedItemURLs.contains(item.url) ? pane.selectedItems : [item]
                         DragDropManager.shared.startDrag(items: itemsToDrag, from: pane)
-                        return NSItemProvider(object: item.url as NSURL)
+                        if pane.isRemote, let conn = pane.remoteConnection {
+                            let pwd = pane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
+                            return RemoteDragProvider.make(item: item, connection: conn, password: pwd)
+                        }
+                        return DragDropManager.shared.makeProvider(for: item.url)
                     }
                     .onTapGesture(count: 2) {
                         onActivate()

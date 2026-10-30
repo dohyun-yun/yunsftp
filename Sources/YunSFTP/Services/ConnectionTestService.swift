@@ -79,12 +79,13 @@ public actor ConnectionTestService {
                 switch state {
                 case .ready:
                     let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000.0
-                    var resolvedIP: String? = nil
-
-                    if let endpoint = connection.currentPath?.remoteEndpoint,
-                       case let .hostPort(remoteHost, _) = endpoint {
-                        resolvedIP = remoteHost.debugDescription
-                    }
+                    let resolvedIP: String? = {
+                        if let endpoint = connection.currentPath?.remoteEndpoint,
+                           case let .hostPort(remoteHost, _) = endpoint {
+                            return remoteHost.debugDescription
+                        }
+                        return nil
+                    }()
 
                     if isSSH {
                         // Read initial SSH banner

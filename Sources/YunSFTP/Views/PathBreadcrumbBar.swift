@@ -4,6 +4,8 @@ public struct PathBreadcrumbBar: View {
     @ObservedObject var pane: PaneModel
     @State private var isEditingPath = false
     @State private var customPathText = ""
+    @FocusState private var isPathFieldFocused: Bool
+    @ObservedObject private var bookmarkStore = BookmarkStore.shared
 
     public var body: some View {
         HStack(spacing: 6) {
@@ -11,27 +13,27 @@ public struct PathBreadcrumbBar: View {
             HStack(spacing: 2) {
                 Button(action: { pane.goBack() }) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                 }
                 .disabled(!pane.canGoBack)
                 .buttonStyle(.plain)
-                .help("Back (Cmd+[)")
+                .help(L("Back (Cmd+[)"))
 
                 Button(action: { pane.goForward() }) {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                 }
                 .disabled(!pane.canGoForward)
                 .buttonStyle(.plain)
-                .help("Forward (Cmd+])")
+                .help(L("Forward (Cmd+])"))
 
                 Button(action: { pane.goUp() }) {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                 }
                 .disabled(!pane.canGoUp)
                 .buttonStyle(.plain)
-                .help("Enclosing Folder (Cmd+Up)")
+                .help(L("Enclosing Folder (Cmd+Up)"))
             }
             .padding(.trailing, 4)
 
@@ -46,21 +48,21 @@ public struct PathBreadcrumbBar: View {
                         .shadow(color: .green.opacity(0.8), radius: 2)
 
                     Image(systemName: "network")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundColor(.green)
 
                     Text(conn.displayTitle)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(.primary)
                         .lineLimit(1)
 
                     Button(action: { pane.disconnectRemote() }) {
                         Image(systemName: "eject")
-                            .font(.system(size: 9))
+                            .font(.caption2)
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("Disconnect")
+                    .help(L("Disconnect"))
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2.5)
@@ -80,11 +82,11 @@ public struct PathBreadcrumbBar: View {
                         .frame(width: 6, height: 6)
 
                     Image(systemName: "internaldrive")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
 
-                    Text("Local")
-                        .font(.system(size: 11, weight: .semibold))
+                    Text(L("Local"))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(.primary)
                         .lineLimit(1)
                 }
@@ -104,19 +106,22 @@ public struct PathBreadcrumbBar: View {
             // Path Breadcrumbs or Text Field
             if isEditingPath {
                 HStack {
-                    TextField("Enter path...", text: $customPathText, onCommit: {
+                    TextField(L("Enter path..."), text: $customPathText, onCommit: {
                         applyCustomPath()
                     })
                     .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 12))
+                    .font(.callout)
+                    .focused($isPathFieldFocused)
+                    .onExitCommand { isEditingPath = false }
+                    .onAppear { isPathFieldFocused = true }
 
-                    Button("Go") {
+                    Button(L("Go")) {
                         applyCustomPath()
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
 
-                    Button("Cancel") {
+                    Button(L("Cancel")) {
                         isEditingPath = false
                     }
                     .buttonStyle(.bordered)
@@ -137,14 +142,14 @@ public struct PathBreadcrumbBar: View {
                                     HStack(spacing: 3) {
                                         if item.isRoot {
                                             Image(systemName: pane.isRemote ? "server.rack" : "internaldrive")
-                                                .font(.system(size: 11))
+                                                .font(.subheadline)
                                                 .foregroundColor(pane.isRemote ? .accentColor : .secondary)
                                         } else if item.isHome {
                                             Image(systemName: "house")
-                                                .font(.system(size: 11))
+                                                .font(.subheadline)
                                         }
                                         Text(item.name)
-                                            .font(.system(size: 12))
+                                            .font(.callout)
                                             .lineLimit(1)
                                     }
                                     .padding(.horizontal, 4)
@@ -156,7 +161,7 @@ public struct PathBreadcrumbBar: View {
 
                                 if item.url != pane.currentURL {
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(.caption2.weight(.bold))
                                         .foregroundColor(.secondary.opacity(0.6))
                                 }
                             }
@@ -193,24 +198,40 @@ public struct PathBreadcrumbBar: View {
                 isEditingPath.toggle()
             }) {
                 Image(systemName: isEditingPath ? "xmark" : "character.cursor.ibeam")
-                    .font(.system(size: 11))
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .help("Edit path manually")
+            .help(L("Edit path manually"))
 
             // Reload button
+            if pane.isRemote, let conn = pane.remoteConnection {
+                let bookmarked = bookmarkStore.isBookmarked(connectionID: conn.id, path: pane.remotePath)
+                Button(action: { bookmarkStore.toggle(connectionID: conn.id, path: pane.remotePath) }) {
+                    Image(systemName: bookmarked ? "bookmark.fill" : "bookmark")
+                        .font(.subheadline)
+                        .foregroundColor(bookmarked ? .accentColor : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help(bookmarked ? "Remove bookmark" : "Bookmark this folder")
+                .accessibilityLabel(bookmarked ? "Remove bookmark" : "Bookmark this folder")
+            }
+
             Button(action: { pane.reload() }) {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11))
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .help("Reload folder")
+            .help(L("Reload folder"))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(Color(NSColor.controlBackgroundColor))
+        .onChange(of: pane.pathEditRequest) { _ in
+            customPathText = pane.isRemote ? pane.remotePath : pane.currentURL.path
+            isEditingPath = true
+        }
     }
 
     private struct PathItem {
@@ -225,7 +246,7 @@ public struct PathBreadcrumbBar: View {
         if pane.isRemote, let conn = pane.remoteConnection {
             var items: [PathItem] = []
             let serverURL = SFTPService.sftpURL(host: conn.host, port: conn.port, path: "/")
-            items.append(PathItem(name: conn.displayTitle, url: serverURL, isRoot: true, isHome: false, remotePath: "/"))
+            items.append(PathItem(name: "/", url: serverURL, isRoot: true, isHome: false, remotePath: "/"))
 
             let cleanPath = SFTPService.decodeLsEscapes(pane.remotePath).precomposedStringWithCanonicalMapping
             let segments = cleanPath.split(separator: "/").map(String.init)

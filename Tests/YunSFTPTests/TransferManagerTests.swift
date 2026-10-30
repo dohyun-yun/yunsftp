@@ -115,3 +115,35 @@ final class TransferManagerTests: XCTestCase {
     }
 }
 
+
+extension TransferManagerTests {
+    @MainActor
+    func testHistoryIsCappedToTheNewestFinishedRows() {
+        let tm = TransferManager()
+        for i in 0..<(TransferManager.historyLimit + 5) {
+            let id = tm.addTransfer(fileName: "f\(i)", direction: .localCopy, totalBytes: 1)
+            tm.markCompleted(id: id)
+        }
+        XCTAssertEqual(tm.transfers.count, TransferManager.historyLimit + 1, "trim runs on add, so the newest row is kept on top of the cap")
+        XCTAssertEqual(tm.transfers.first?.fileName, "f4")
+    }
+}
+
+extension TransferManagerTests {
+    @MainActor
+    func testDismissHidesBannerWithoutTouchingHistoryAndOldRowsDoNotResurface() {
+        let tm = TransferManager()
+        let old = tm.addTransfer(fileName: "old.zip", direction: .download, totalBytes: 1)
+        tm.markCompleted(id: old)
+        tm.hideBanner()
+        XCTAssertFalse(tm.isVisible)
+        XCTAssertEqual(tm.transfers.count, 1, "Dismiss keeps history")
+
+        // Removing an unrelated row while nothing is active must not bring the banner back.
+        let gone = tm.addTransfer(fileName: "x", direction: .upload, totalBytes: 1)
+        tm.markFailed(id: gone, error: "boom")
+        tm.hideBanner()
+        tm.remove(id: gone)
+        XCTAssertFalse(tm.isVisible)
+    }
+}

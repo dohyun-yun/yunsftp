@@ -64,7 +64,10 @@ public actor FileSystemService {
         }
     }
 
-    public func move(urls: [URL], to destinationDirectory: URL, overwrite: Bool = false) async throws {
+    /// Returns the final destination of each moved item (unique names applied).
+    @discardableResult
+    public func move(urls: [URL], to destinationDirectory: URL, overwrite: Bool = false) async throws -> [URL] {
+        var moved: [URL] = []
         for src in urls {
             // Avoid moving folder into itself (component-wise, so /a/b does not block /a/bc)
             if Self.isSameOrDescendant(destinationDirectory, of: src) {
@@ -79,7 +82,9 @@ public actor FileSystemService {
                 }
             }
             try fileManager.moveItem(at: src, to: dest)
+            moved.append(dest)
         }
+        return moved
     }
 
     @discardableResult
@@ -100,10 +105,21 @@ public actor FileSystemService {
         }
     }
 
-    public func moveToTrash(urls: [URL]) async throws {
+    /// Returns (original, trashed) pairs; moving the trashed URL back is the undo.
+    @discardableResult
+    public func moveToTrash(urls: [URL]) async throws -> [(original: URL, trashed: URL)] {
+        var pairs: [(URL, URL)] = []
         for url in urls {
-            try fileManager.trashItem(at: url, resultingItemURL: nil)
+            var trashed: NSURL?
+            try fileManager.trashItem(at: url, resultingItemURL: &trashed)
+            if let t = trashed as URL? { pairs.append((url, t)) }
         }
+        return pairs
+    }
+
+    /// Inverse of `moveToTrash` for one pair.
+    public func restoreFromTrash(_ pair: (original: URL, trashed: URL)) throws {
+        try fileManager.moveItem(at: pair.trashed, to: pair.original)
     }
 
     public func deletePermanently(urls: [URL]) async throws {
@@ -210,6 +226,19 @@ public actor FileSystemService {
         let a = ancestor.standardizedFileURL.pathComponents
         let c = candidate.standardizedFileURL.pathComponents
         return c.count >= a.count && Array(c.prefix(a.count)) == a
+    }
+
+    /// Total size of all regular files below `url` (symlinks not followed). Errors are skipped.
+    public static func directorySize(_ url: URL) -> Int64 {
+        guard let e = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey], options: []) else { return 0 }
+        var total: Int64 = 0
+        for case let f as URL in e {
+            if Task.isCancelled { break }
+            if let v = try? f.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]), v.isRegularFile == true {
+                total += Int64(v.fileSize ?? 0)
+            }
+        }
+        return total
     }
 
     /// Where a "keep both" copy/download of `fileName` into `directory` will land. Shared by the

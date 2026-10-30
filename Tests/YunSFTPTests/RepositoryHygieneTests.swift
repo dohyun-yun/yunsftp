@@ -45,3 +45,14 @@ extension RepositoryHygieneTests {
         XCTAssertFalse(text.contains("\"New Window\""))
     }
 }
+
+extension RepositoryHygieneTests {
+    /// GitHub rejects workflows that reference `secrets` in a step-level `if`.
+    func testReleaseWorkflowNeverTestsSecretsInStepConditions() throws {
+        let url = sourcesRoot.deletingLastPathComponent().appendingPathComponent(".github/workflows/release.yml")
+        let text = try String(contentsOf: url, encoding: .utf8)
+        for line in text.components(separatedBy: "\n") where line.trimmingCharacters(in: .whitespaces).hasPrefix("if:") {
+            XCTAssertFalse(line.contains("secrets."), line)
+        }
+    }
+}

@@ -59,7 +59,7 @@ Legend as above. Order = execution order.
 - [x] 35. Shared transfer coordinator replacing the nine near-identical copy/move/drop/paste loops.
 - [x] 36. Edit remote file in external editor with auto-upload on save (FSEvents watch).
 - [x] 37. Undo for local rename / move / trash.
-- [ ] 38. Remote path bookmarks and recent locations per connection.
+- [x] 38. Remote path bookmarks and recent locations per connection.
 - [ ] 39. Folder size on demand in Get Info; remote recursive search.
 - [ ] 40. Update check against GitHub Releases (menu item + startup once a day, opt-out).
 

@@ -5,6 +5,7 @@ public struct PathBreadcrumbBar: View {
     @State private var isEditingPath = false
     @State private var customPathText = ""
     @FocusState private var isPathFieldFocused: Bool
+    @ObservedObject private var bookmarkStore = BookmarkStore.shared
 
     public var body: some View {
         HStack(spacing: 6) {
@@ -204,6 +205,18 @@ public struct PathBreadcrumbBar: View {
             .help("Edit path manually")
 
             // Reload button
+            if pane.isRemote, let conn = pane.remoteConnection {
+                let bookmarked = bookmarkStore.isBookmarked(connectionID: conn.id, path: pane.remotePath)
+                Button(action: { bookmarkStore.toggle(connectionID: conn.id, path: pane.remotePath) }) {
+                    Image(systemName: bookmarked ? "bookmark.fill" : "bookmark")
+                        .font(.subheadline)
+                        .foregroundColor(bookmarked ? .accentColor : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help(bookmarked ? "Remove bookmark" : "Bookmark this folder")
+                .accessibilityLabel(bookmarked ? "Remove bookmark" : "Bookmark this folder")
+            }
+
             Button(action: { pane.reload() }) {
                 Image(systemName: "arrow.clockwise")
                     .font(.subheadline)

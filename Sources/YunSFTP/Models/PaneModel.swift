@@ -109,6 +109,7 @@ public class PaneModel: ObservableObject, Identifiable {
         self.isLoading = true
         self.errorMessage = nil
         self.connectingMessage = "Connecting to '\(connection.displayTitle)'..."
+        BookmarkStore.shared.recordVisit(connectionID: connection.id, path: path)
         loadItems()
     }
 
@@ -144,6 +145,7 @@ public class PaneModel: ObservableObject, Identifiable {
         guard let conn = remoteConnection else { return }
         let cleanPath = SFTPService.normalizeRemotePath(path)
         self.remotePath = cleanPath
+        BookmarkStore.shared.recordVisit(connectionID: conn.id, path: cleanPath)
         let virtualURL = SFTPService.sftpURL(host: conn.host, port: conn.port, path: cleanPath)
         self.currentURL = virtualURL
         self.items.removeAll() // Clear old directory items so they don't linger

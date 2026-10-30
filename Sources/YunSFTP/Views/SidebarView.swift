@@ -11,6 +11,8 @@ public struct SidebarView: View {
     var onEditConnection: (RemoteConnection) -> Void
     var onTestConnection: ((RemoteConnection) -> Void)? = nil
     var onManageConnections: () -> Void
+    var onOpenRemotePath: ((RemoteConnection, String) -> Void)? = nil
+    @ObservedObject private var bookmarkStore = BookmarkStore.shared
 
     public var body: some View {
         List {
@@ -149,10 +151,41 @@ public struct SidebarView: View {
                             Button("Open in Terminal SSH") {
                                 connectionManager.openSSHTerminal(for: conn)
                             }
+                            let recent = bookmarkStore.recents(for: conn.id)
+                            if !recent.isEmpty {
+                                Menu("Recent Folders") {
+                                    ForEach(recent, id: \.self) { path in
+                                        Button(path) { onOpenRemotePath?(conn, path) }
+                                    }
+                                }
+                            }
                             Divider()
                             Button("Delete", role: .destructive) {
                                 KeychainService.shared.deletePassword(for: conn)
                                 connectionManager.deleteConnection(id: conn.id)
+                                bookmarkStore.forget(connectionID: conn.id)
+                            }
+                        }
+
+                        ForEach(bookmarkStore.bookmarks(for: conn.id)) { bm in
+                            Button(action: { onOpenRemotePath?(conn, bm.path) }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "bookmark.fill")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .frame(width: 16)
+                                    Text(bm.name)
+                                        .font(.subheadline)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.leading, 22)
+                            .help(bm.path)
+                            .contextMenu {
+                                Button("Remove Bookmark") { bookmarkStore.remove(id: bm.id) }
                             }
                         }
                     }

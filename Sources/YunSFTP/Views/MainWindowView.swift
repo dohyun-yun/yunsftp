@@ -96,6 +96,9 @@ public struct MainWindowView: View {
                     connectSheetIsEditMode = false
                     connectSheetAutoRunTest = false
                     showConnectSheet = true
+                },
+                onOpenRemotePath: { conn, path in
+                    openRemotePath(conn, path: path)
                 }
             )
             .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 340)
@@ -508,6 +511,25 @@ public struct MainWindowView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Bookmark / recent folder: navigate if already on that server, otherwise connect straight there.
+    private func openRemotePath(_ conn: RemoteConnection, path: String) {
+        if activePane.isRemote, activePane.remoteConnection?.id == conn.id {
+            activePane.navigateToRemote(path: path)
+            return
+        }
+        var target = conn
+        target.remotePath = path
+        let pwd = KeychainService.shared.loadPassword(for: conn)
+        if conn.authType == .password && (pwd == nil || pwd!.isEmpty) {
+            connectSheetInitialConn = target
+            connectSheetIsEditMode = false
+            connectSheetAutoRunTest = false
+            showConnectSheet = true
+        } else {
+            activePane.connectRemote(connection: target, password: pwd)
         }
     }
 

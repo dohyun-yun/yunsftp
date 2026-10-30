@@ -212,21 +212,16 @@ public actor FileSystemService {
         return c.count >= a.count && Array(c.prefix(a.count)) == a
     }
 
+    /// Where a "keep both" copy/download of `fileName` into `directory` will land. Shared by the
+    /// local copy path, SFTP downloads and the progress monitors so they all agree on the name.
+    public static func plannedDestinationURL(fileName: String, in directory: URL) -> URL {
+        let existing = Set(((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
+            .map { $0.precomposedStringWithCanonicalMapping })
+        let name = SFTPService.uniqueName(fileName.precomposedStringWithCanonicalMapping, existing: existing)
+        return directory.appendingPathComponent(name)
+    }
+
     private func uniqueDestinationURL(for url: URL) -> URL {
-        guard fileManager.fileExists(atPath: url.path) else { return url }
-
-        let parent = url.deletingLastPathComponent()
-        let ext = (url.lastPathComponent as NSString).pathExtension
-        let base = (url.lastPathComponent as NSString).deletingPathExtension
-
-        var count = 2
-        while true {
-            let candidateName = ext.isEmpty ? "\(base) \(count)" : "\(base) \(count).\(ext)"
-            let candidateURL = parent.appendingPathComponent(candidateName)
-            if !fileManager.fileExists(atPath: candidateURL.path) {
-                return candidateURL
-            }
-            count += 1
-        }
+        return Self.plannedDestinationURL(fileName: url.lastPathComponent, in: url.deletingLastPathComponent())
     }
 }

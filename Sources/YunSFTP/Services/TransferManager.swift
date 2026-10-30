@@ -72,19 +72,22 @@ public class TransferManager: ObservableObject {
     @Published public var currentTransfer: TransferTaskItem? = nil
     @Published public var isVisible: Bool = false
 
-    /// Set when the user cancels an active transfer. Batch loops poll it via
-    /// `consumeCancelRequest()` so the remaining files of the batch are skipped.
-    public private(set) var cancelRequested: Bool = false
+    /// When the user last cancelled an in-progress transfer. Batch loops poll it with the time
+    /// they started, so a stale cancel can never abort a later, unrelated batch.
+    public private(set) var cancelRequestedAt: Date?
 
     public init() {}
 
-    public func consumeCancelRequest() -> Bool {
-        defer { cancelRequested = false }
-        return cancelRequested
+    public func consumeCancelRequest(since batchStart: Date) -> Bool {
+        guard let at = cancelRequestedAt, at >= batchStart else { return false }
+        cancelRequestedAt = nil
+        return true
     }
 
     private func requestCancel() {
-        cancelRequested = true
+        cancelRequestedAt = Date()
+        // ponytail: transfers run one process at a time, so "all children" is the current transfer;
+        // a listing racing with the cancel is also killed. Tag processes per transfer if that bites.
         ProcessRegistry.shared.terminateAll()
     }
 
@@ -136,6 +139,7 @@ public class TransferManager: ObservableObject {
 
     public func markCompleted(id: UUID) {
         if let idx = transfers.firstIndex(where: { $0.id == id }) {
+            guard transfers[idx].state != .cancelled else { updateCurrentTransfer(); return }
             transfers[idx].state = .completed
             transfers[idx].progress = 1.0
             if transfers[idx].totalBytes > 0 {
@@ -161,7 +165,8 @@ public class TransferManager: ObservableObject {
 
     public func cancelTransfer(id: UUID) {
         if let idx = transfers.firstIndex(where: { $0.id == id }) {
-            if transfers[idx].state == .inProgress || transfers[idx].state == .queued {
+            // Only an in-progress transfer owns a process; a queued one is just dropped.
+            if transfers[idx].state == .inProgress {
                 requestCancel()
             }
             transfers[idx].state = .cancelled
@@ -172,7 +177,7 @@ public class TransferManager: ObservableObject {
     }
 
     public func cancelAll() {
-        if hasActiveTransfers { requestCancel() }
+        if transfers.contains(where: { $0.state == .inProgress }) { requestCancel() }
         for i in 0..<transfers.count {
             if transfers[i].state == .inProgress || transfers[i].state == .queued {
                 transfers[i].state = .cancelled

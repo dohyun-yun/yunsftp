@@ -3,7 +3,7 @@ import XCTest
 
 final class FileSystemServiceTests: XCTestCase {
 
-    private func makeTempDir() throws -> URL {
+    func makeTempDir() throws -> URL {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("fsTests_\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
@@ -52,5 +52,23 @@ final class FileSystemServiceTests: XCTestCase {
         proc.waitUntilExit()
         let listing = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         XCTAssertTrue(listing.contains("-r"))
+    }
+}
+
+extension FileSystemServiceTests {
+    func testPlannedDestinationMatchesWhatCopyProduces() async throws {
+        let root = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let src = root.appendingPathComponent("src"); let dst = root.appendingPathComponent("dst")
+        try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: dst, withIntermediateDirectories: true)
+        let file = src.appendingPathComponent("r.txt")
+        try "x".write(to: file, atomically: true, encoding: .utf8)
+        try "old".write(to: dst.appendingPathComponent("r.txt"), atomically: true, encoding: .utf8)
+
+        let planned = FileSystemService.plannedDestinationURL(fileName: "r.txt", in: dst)
+        XCTAssertEqual(planned.lastPathComponent, "r 2.txt")
+        try await FileSystemService.shared.copy(urls: [file], to: dst)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: planned.path))
     }
 }

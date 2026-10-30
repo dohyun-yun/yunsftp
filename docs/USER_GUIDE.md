@@ -65,7 +65,7 @@ Welcome to the comprehensive user manual for **yunsftp** — the lightweight, ad
 4. Launch `yunsftp` from Spotlight, Launchpad, or Finder.
 
 #### Method B: Building from Source
-Ensure Xcode 15 or later (Swift 5.9+) command-line tools are installed:
+Ensure Xcode 16 or later (Swift 6 toolchain) command-line tools are installed:
 ```bash
 git clone https://github.com/dohyun-yun/yunsftp.git
 cd yunsftp

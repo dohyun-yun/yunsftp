@@ -160,7 +160,7 @@ public struct FilePreviewSheet: View {
 
             Task {
                 do {
-                    let downloadedURL = try await SFTPService.shared.download(remotePath: remotePath, to: tempDir, connection: conn, password: pwd)
+                    let downloadedURL = try await SFTPService.shared.download(remotePath: remotePath, to: tempDir, connection: conn, password: pwd, overwrite: true)
                     await MainActor.run {
                         self.localPreviewURL = downloadedURL
                         self.loadFromLocalURL(downloadedURL)

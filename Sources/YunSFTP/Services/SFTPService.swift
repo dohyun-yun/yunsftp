@@ -59,17 +59,27 @@ public final class ProcessRegistry: @unchecked Sendable {
     public static let shared = ProcessRegistry()
     private let lock = NSLock()
     private var processes: [ObjectIdentifier: Process] = [:]
+    /// Processes we signalled. sftp/scp handle SIGTERM themselves and exit "normally", so the
+    /// exit status alone cannot tell a cancel from a failure.
+    private var terminated: Set<ObjectIdentifier> = []
 
     // Keyed by object identity so registering before run() is safe even if the child exits
     // (and the termination handler fires) immediately.
     func register(_ p: Process) { lock.lock(); processes[ObjectIdentifier(p)] = p; lock.unlock() }
     func unregister(_ p: Process) { lock.lock(); processes.removeValue(forKey: ObjectIdentifier(p)); lock.unlock() }
 
+    /// True once per process if `terminateAll()` signalled it.
+    func consumeTerminated(_ p: Process) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return terminated.remove(ObjectIdentifier(p)) != nil
+    }
+
     /// Sends SIGTERM to every running child. Returns how many were signalled.
     @discardableResult
     public func terminateAll() -> Int {
         lock.lock()
         let running = Array(processes.values)
+        running.forEach { terminated.insert(ObjectIdentifier($0)) }
         lock.unlock()
         running.forEach { if $0.isRunning { $0.terminate() } }
         return running.count
@@ -286,7 +296,8 @@ public actor SFTPService {
     }
 
     /// Downloads `remotePath` into `localDirectory`. Unless `overwrite` is set, an existing
-    /// local item with the same name is kept and the download gets a " 2" suffix.
+    /// local item with the same name is kept and the download gets a " 2" suffix. A failed or
+    /// cancelled download never leaves a partial file behind (for the non-overwrite case).
     public func download(remotePath: String, to localDirectory: URL, connection: RemoteConnection, password: String?, overwrite: Bool = false) async throws -> URL {
         let cleanRemotePath = Self.normalizeRemotePath(remotePath)
         let fileName = (cleanRemotePath as NSString).lastPathComponent
@@ -296,43 +307,30 @@ public actor SFTPService {
 
         try? FileManager.default.createDirectory(at: localDirectory, withIntermediateDirectories: true)
 
-        let localNames = Set(((try? FileManager.default.contentsOfDirectory(atPath: localDirectory.path)) ?? []).map { $0.precomposedStringWithCanonicalMapping })
-        let destName = overwrite ? fileName : Self.uniqueName(fileName, existing: localNames)
-        let localDestURL = localDirectory.appendingPathComponent(destName)
+        let localDestURL = overwrite
+            ? localDirectory.appendingPathComponent(fileName)
+            : FileSystemService.plannedDestinationURL(fileName: fileName, in: localDirectory)
+        let destName = localDestURL.lastPathComponent
+        let discardPartial = { if !overwrite { try? FileManager.default.removeItem(at: localDestURL) } }
 
-        let destPath = localDestURL.path.precomposedStringWithCanonicalMapping
-
-        // 1. Primary: SFTP batch using lcd (local dest) + cd (remote parent) + get -R (filename)
-        let sftpCommands: [String] = [
-            "lcd \(Self.sftpQuote(localDirectory.path))",
-            "cd \(Self.sftpQuote(remoteParent))",
-            "get -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(destName))"
+        let batchAttempts: [[String]] = [
+            // 1. lcd (local dest) + cd (remote parent) + get -R (filename) -> respects chroot shares
+            ["lcd \(Self.sftpQuote(localDirectory.path))", "cd \(Self.sftpQuote(remoteParent))", "get -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(destName))"],
+            // 2. direct get with the full remote path if the cd failed
+            ["lcd \(Self.sftpQuote(localDirectory.path))", "get -R \(Self.sftpQuote(cleanRemotePath)) \(Self.sftpQuote(destName))"]
         ]
-        do {
-            _ = try await executeSFTPBatch(commands: sftpCommands, connection: connection, password: effectivePwd)
-        } catch where !Self.isAuthenticationFailure(error) {
-            if FileManager.default.fileExists(atPath: destPath) || FileManager.default.fileExists(atPath: localDestURL.path) {
-                return localDestURL
+        for commands in batchAttempts {
+            do {
+                _ = try await executeSFTPBatch(commands: commands, connection: connection, password: effectivePwd)
+                if FileManager.default.fileExists(atPath: localDestURL.path) {
+                    return localDestURL
+                }
+            } catch where !Self.isAuthenticationFailure(error) && !Self.isCancellation(error) {
+                discardPartial()
+            } catch {
+                discardPartial()
+                throw error
             }
-        }
-        if FileManager.default.fileExists(atPath: destPath) || FileManager.default.fileExists(atPath: localDestURL.path) {
-            return localDestURL
-        }
-
-        // 2. Direct get with quotes if remoteParent cd failed
-        let directCmds = [
-            "lcd \(Self.sftpQuote(localDirectory.path))",
-            "get -R \(Self.sftpQuote(cleanRemotePath)) \(Self.sftpQuote(destName))"
-        ]
-        do {
-            _ = try await executeSFTPBatch(commands: directCmds, connection: connection, password: effectivePwd)
-        } catch where !Self.isAuthenticationFailure(error) {
-            if FileManager.default.fileExists(atPath: destPath) || FileManager.default.fileExists(atPath: localDestURL.path) {
-                return localDestURL
-            }
-        }
-        if FileManager.default.fileExists(atPath: destPath) || FileManager.default.fileExists(atPath: localDestURL.path) {
-            return localDestURL
         }
 
         // 3. Fallback to scp (quoting remoteSpec for remote shell execution)
@@ -348,9 +346,14 @@ public actor SFTPService {
         let remoteSpec = "\(userPart)\(connection.host):\(Self.posixShellEscape(cleanRemotePath))"
         args.append(contentsOf: ["-r", remoteSpec, localDestURL.path])
 
-        _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd)
+        do {
+            _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd)
+        } catch {
+            discardPartial()
+            throw error
+        }
 
-        if !FileManager.default.fileExists(atPath: destPath) && !FileManager.default.fileExists(atPath: localDestURL.path) {
+        guard FileManager.default.fileExists(atPath: localDestURL.path) else {
             throw NSError(domain: "SFTPService", code: 2, userInfo: [
                 NSLocalizedDescriptionKey: "Download failed: \(fileName) was not written to the local destination."
             ])
@@ -368,8 +371,7 @@ public actor SFTPService {
 
         var remoteName = fileName
         if !overwrite {
-            let siblings = (try? await listDirectory(path: cleanRemoteDir, connection: connection, password: effectivePwd)) ?? []
-            remoteName = Self.uniqueName(fileName, existing: Set(siblings.map { $0.name }))
+            remoteName = try await uniqueRemoteName(fileName, in: cleanRemoteDir, connection: connection, password: effectivePwd)
         }
         let remoteDest = cleanRemoteDir == "/" ? "/\(remoteName)" : "\(cleanRemoteDir)/\(remoteName)"
 
@@ -404,6 +406,30 @@ public actor SFTPService {
                 args.append(contentsOf: ["-r", localURL.path, remoteSpec])
 
                 _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd)
+            }
+        }
+    }
+
+    /// True when `remotePath` exists (file or directory). Auth failures and cancellation propagate.
+    func remoteExists(_ remotePath: String, connection: RemoteConnection, password: String?) async throws -> Bool {
+        do {
+            _ = try await executeSFTPBatch(commands: ["ls -la \(Self.sftpQuote(remotePath))"], connection: connection, password: password)
+            return true
+        } catch where !Self.isAuthenticationFailure(error) && !Self.isCancellation(error) {
+            return false
+        }
+    }
+
+    /// Probes only the candidate names ("name", "name 2", ...) instead of listing the directory.
+    func uniqueRemoteName(_ fileName: String, in remoteDir: String, connection: RemoteConnection, password: String?) async throws -> String {
+        var taken = Set<String>()
+        while true {
+            let candidate = Self.uniqueName(fileName, existing: taken)
+            let path = remoteDir == "/" ? "/\(candidate)" : "\(remoteDir)/\(candidate)"
+            if try await remoteExists(path, connection: connection, password: password) {
+                taken.insert(candidate)
+            } else {
+                return candidate
             }
         }
     }
@@ -765,6 +791,12 @@ public actor SFTPService {
             let output = String(data: outData, encoding: .utf8) ?? ""
             let errorMsg = String(data: errData, encoding: .utf8) ?? ""
 
+            if ProcessRegistry.shared.consumeTerminated(process) || process.terminationReason == .uncaughtSignal {
+                throw NSError(domain: "SFTPService", code: Self.cancellationCode, userInfo: [
+                    NSLocalizedDescriptionKey: "Transfer cancelled."
+                ])
+            }
+
             if process.terminationStatus != 0 {
                 let cleanErr = errorMsg.components(separatedBy: .newlines)
                     .filter { !$0.contains("WARNING") && !$0.isEmpty }
@@ -789,6 +821,14 @@ public actor SFTPService {
     /// with alternative transports on this error: every retry is another failed login that
     /// can trigger fail2ban / NAS auto-block.
     static let authenticationFailureCode = -1001
+
+    /// Error code used when the child process was terminated by a signal (user cancel).
+    static let cancellationCode = -1002
+
+    static func isCancellation(_ error: Error) -> Bool {
+        let ns = error as NSError
+        return ns.domain == "SFTPService" && ns.code == cancellationCode
+    }
 
     static func isAuthenticationFailure(_ error: Error) -> Bool {
         let ns = error as NSError

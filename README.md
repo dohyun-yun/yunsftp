@@ -12,7 +12,7 @@
 <p align="center">
   <a href="#-features"><img src="https://img.shields.io/badge/Platform-macOS%2013.0%2B-blue?logo=apple" alt="Platform"></a>
   <a href="#-features"><img src="https://img.shields.io/badge/Architecture-Apple%20Silicon%20(arm64)-orange" alt="Apple Silicon"></a>
-  <a href="#-features"><img src="https://img.shields.io/badge/Swift-5.9%2B-F05138?logo=swift" alt="Swift 5.9+"></a>
+  <a href="#-features"><img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift" alt="Swift 6"></a>
   <a href="https://github.com/dohyun-yun/yunsftp/actions/workflows/ci.yml"><img src="https://github.com/dohyun-yun/yunsftp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/No%20Ads-100%25%20Free-success" alt="100% Free">
@@ -129,7 +129,7 @@ Download the latest `.dmg` installer or `.zip` archive from the [Releases](https
 > Verify the download against `checksums.txt` on the release page before doing so.
 
 ### Option 2: Build from Source
-Ensure Xcode 15 or later (Swift 5.9+) command-line tools are installed:
+Ensure Xcode 16 or later (Swift 6 toolchain) command-line tools are installed:
 
 ```bash
 # 1. Clone the repository

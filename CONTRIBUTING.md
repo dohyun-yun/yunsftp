@@ -12,7 +12,7 @@ swift test          # integration tests use the local /usr/libexec/sftp-server
 ./scripts/build_app.sh && ./scripts/install.sh
 ```
 
-Requirements: Apple Silicon Mac, macOS 13+, Xcode 15+ (Swift 5.9+).
+Requirements: Apple Silicon Mac, macOS 13+ at runtime, Xcode 16+ (Swift 6 toolchain) to build.
 
 ## Pull requests
 

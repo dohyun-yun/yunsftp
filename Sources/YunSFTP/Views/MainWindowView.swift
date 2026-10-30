@@ -845,6 +845,24 @@ public struct MainWindowView: View {
         }
     }
 
+    static func remoteDeleteAlertText(itemNames: [String]) -> (title: String, message: String) {
+        let title = itemNames.count == 1
+            ? "Delete \"\(itemNames[0])\" from the server?"
+            : "Delete \(itemNames.count) items from the server?"
+        return (title, "Remote files are removed permanently. This cannot be undone.")
+    }
+
+    private static func confirmRemoteDelete(itemNames: [String]) -> Bool {
+        let text = remoteDeleteAlertText(itemNames: itemNames)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = text.title
+        alert.informativeText = text.message
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
     private func trashItems(_ items: [FileItem]) {
         let targets = !items.isEmpty ? items : activePane.effectiveSelectedItems
         guard !targets.isEmpty else { return }
@@ -853,6 +871,8 @@ public struct MainWindowView: View {
 
         if targetPane.isRemote {
             guard let conn = targetPane.remoteConnection else { return }
+            // Remote deletion is permanent (no trash), so unlike the local path it needs confirmation.
+            guard Self.confirmRemoteDelete(itemNames: targets.map { $0.name }) else { return }
             let pwd = targetPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
             Task {
                 var hadError = false

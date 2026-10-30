@@ -392,17 +392,8 @@ public actor SFTPService {
                 _ = try await executeSFTPBatch(commands: cdRmCmds, connection: connection, password: effectivePwd)
                 return
             } catch where !Self.isAuthenticationFailure(error) {
-                do {
-                    _ = try await executeSFTPBatch(commands: ["rm \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
-                    return
-                } catch where !Self.isAuthenticationFailure(error) {
-                    if connection.host == "local-sftp-server" {
-                        throw error
-                    }
-                    // Fallback to SSH only if file actually exists in SSH namespace (never blind rm -f!)
-                    let cmd = "test -e \(Self.posixShellEscape(nfc)) && rm -f \(Self.posixShellEscape(nfc))"
-                    _ = try await executeSSH(command: cmd, connection: connection, password: effectivePwd)
-                }
+                _ = try await executeSFTPBatch(commands: ["rm \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
+                return
             }
         } else {
             let cdRmdirCmds = [
@@ -413,16 +404,8 @@ public actor SFTPService {
                 _ = try await executeSFTPBatch(commands: cdRmdirCmds, connection: connection, password: effectivePwd)
                 return
             } catch where !Self.isAuthenticationFailure(error) {
-                do {
-                    try await removeDirectoryRecursivelySFTP(remotePath: nfc, connection: connection, password: effectivePwd)
-                    return
-                } catch where !Self.isAuthenticationFailure(error) {
-                    if connection.host == "local-sftp-server" {
-                        throw error
-                    }
-                    let cmd = "test -d \(Self.posixShellEscape(nfc)) && rm -rf \(Self.posixShellEscape(nfc))"
-                    _ = try await executeSSH(command: cmd, connection: connection, password: effectivePwd)
-                }
+                // Deletion stays inside the SFTP subsystem on purpose: no recursive shell removal.
+                try await removeDirectoryRecursivelySFTP(remotePath: nfc, connection: connection, password: effectivePwd)
             }
         }
     }

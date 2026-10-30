@@ -96,3 +96,26 @@ extension SecurityHardeningTests {
         XCTAssertTrue(src.contains("do script \"echo 'a\\\"b\\\\c'\""))
     }
 }
+
+extension SecurityHardeningTests {
+
+    // MARK: - Item 5: remote deletion is confirmed and never shells out to rm -rf
+
+    func testRemoteDeleteNeverUsesShellRemove() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/YunSFTP/Services/SFTPService.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(source.contains("rm -rf"))
+        XCTAssertFalse(source.contains("rm -f "))
+    }
+
+    @MainActor
+    func testRemoteDeleteAlertTextMentionsPermanence() {
+        let single = MainWindowView.remoteDeleteAlertText(itemNames: ["report.pdf"])
+        XCTAssertEqual(single.title, "Delete \"report.pdf\" from the server?")
+        XCTAssertTrue(single.message.contains("permanently"))
+        let many = MainWindowView.remoteDeleteAlertText(itemNames: ["a", "b", "c"])
+        XCTAssertEqual(many.title, "Delete 3 items from the server?")
+    }
+}

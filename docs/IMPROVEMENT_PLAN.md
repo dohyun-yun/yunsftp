@@ -8,7 +8,7 @@ Status board for the hardening pass. One commit per item. Legend: `[ ]` todo, `[
 - [x] 2. Remove opt-in weak algorithms (SHA-1 DH, `+ssh-rsa`); rely on OpenSSH defaults.
 - [x] 3. Stop fallback chains on authentication failure (avoid 3x failed logins per operation).
 - [x] 4. Escape connection fields before building the Terminal AppleScript (`openSSHTerminal`).
-- [ ] 5. Confirm before remote delete; remove the `rm -rf` shell fallback.
+- [x] 5. Confirm before remote delete; remove the `rm -rf` shell fallback.
 - [ ] 6. Create the askpass helper atomically with `0700` permissions.
 - [ ] 7. `zip` argument hardening (`--`), fix move-into-self prefix check.
 

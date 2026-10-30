@@ -39,7 +39,6 @@ chmod +x "$APP_BUNDLE/Contents/MacOS/yunsftp"
 cp "$PROJECT_DIR/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 
 # Copy App Icon
-cp "$PROJECT_DIR/Resources/forklift.icns" "$APP_BUNDLE/Contents/Resources/forklift.icns"
 cp "$PROJECT_DIR/Resources/yunsftp.icns" "$APP_BUNDLE/Contents/Resources/yunsftp.icns"
 
 # Ad-hoc code sign for macOS with persistent designated requirement & entitlements

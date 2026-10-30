@@ -15,9 +15,7 @@ public class ConnectionManager: ObservableObject {
     @Published public var testResults: [UUID: ConnectionTestResult] = [:]
 
     private let storageKey = "yunsftp_SavedConnections"
-    private let legacyStorageKey = "ForkLiftSilicon_SavedConnections"
     private let migrationDoneKey = "yunsftp_MigrationDone"
-    private let legacyMigrationDoneKey = "ForkLiftSilicon_MigrationDone"
 
     public init() {
         loadConnections()
@@ -28,13 +26,6 @@ public class ConnectionManager: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: storageKey),
            let list = try? JSONDecoder().decode([RemoteConnection].self, from: data) {
             self.connections = list
-            return
-        }
-        if let data = UserDefaults.standard.data(forKey: legacyStorageKey),
-           let list = try? JSONDecoder().decode([RemoteConnection].self, from: data) {
-            self.connections = list
-            saveConnections()
-            return
         }
     }
 
@@ -45,12 +36,16 @@ public class ConnectionManager: ObservableObject {
     }
 
     public func checkAndPerformAutoMigration() {
-        let migrationDone = UserDefaults.standard.bool(forKey: migrationDoneKey) || UserDefaults.standard.bool(forKey: legacyMigrationDoneKey)
+        let migrationDone = UserDefaults.standard.bool(forKey: migrationDoneKey)
         if !migrationDone && connections.isEmpty {
             let result = MigrationService.shared.migrateFromForkLift2()
             if !result.importedConnections.isEmpty {
                 self.connections = result.importedConnections
                 saveConnections()
+            }
+            // View settings are adopted only on this one-time first launch, never on manual import.
+            if result.sourceFound {
+                result.importedSettings?.save()
             }
             UserDefaults.standard.set(true, forKey: migrationDoneKey)
         }
@@ -142,26 +137,25 @@ public class ConnectionManager: ObservableObject {
         return res
     }
 
+    /// Builds the interactive `ssh` command line for Terminal. Every user-controlled field is
+    /// single-quoted for the shell and `--` prevents a host starting with `-` from being parsed
+    /// as an option.
+    nonisolated public static func sshCommand(for connection: RemoteConnection) -> String {
+        let q = SFTPService.posixShellEscape
+        var parts = ["ssh", "-p", String(connection.port)]
+        if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
+            parts += ["-i", q((connection.keyFilePath as NSString).expandingTildeInPath)]
+        }
+        if connection.allowLegacyAlgorithms {
+            parts += SFTPService.legacySSHOptions.map { $0 == "-o" ? $0 : q($0) }
+        }
+        let target = connection.username.isEmpty ? connection.host : "\(connection.username)@\(connection.host)"
+        parts += ["--", q(target)]
+        return parts.joined(separator: " ")
+    }
+
     public func openSSHTerminal(for connection: RemoteConnection) {
         guard !connection.host.isEmpty else { return }
-
-        let userPart = connection.username.isEmpty ? "" : "\(connection.username)@"
-        var sshCmd = "ssh -p \(connection.port) \(userPart)\(connection.host)"
-
-        if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
-            sshCmd = "ssh -i \(connection.keyFilePath) -p \(connection.port) \(userPart)\(connection.host)"
-        }
-
-        let script = """
-        tell application "Terminal"
-            activate
-            do script "\(sshCmd)"
-        end tell
-        """
-
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
-        }
+        TerminalService.runInTerminal(Self.sshCommand(for: connection))
     }
 }

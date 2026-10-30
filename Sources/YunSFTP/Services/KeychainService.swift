@@ -4,7 +4,6 @@ import Security
 public final class KeychainService: @unchecked Sendable {
     public static let shared = KeychainService()
     private let serviceName = "com.finsternis.yunsftp"
-    private let legacyServiceName = "com.binarynights.ForkLiftSilicon"
 
     private init() {}
 
@@ -42,27 +41,10 @@ public final class KeychainService: @unchecked Sendable {
         ]
 
         var item: CFTypeRef?
-        var status = SecItemCopyMatching(query as CFDictionary, &item)
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
         if status == errSecSuccess, let data = item as? Data, let pwd = String(data: data, encoding: .utf8) {
             return pwd
         }
-
-        // Legacy fallback
-        let legacyQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: legacyServiceName,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var legacyItem: CFTypeRef?
-        status = SecItemCopyMatching(legacyQuery as CFDictionary, &legacyItem)
-        if status == errSecSuccess, let data = legacyItem as? Data, let pwd = String(data: data, encoding: .utf8) {
-            // Re-save to current service
-            savePassword(pwd, for: connection)
-            return pwd
-        }
-
         return nil
     }
 

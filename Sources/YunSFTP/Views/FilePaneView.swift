@@ -114,7 +114,7 @@ public struct FilePaneView: View {
                     VStack(spacing: 12) {
                         ProgressView()
                             .scaleEffect(1.2)
-                        Text(pane.isRemote ? "원격 파일 목록을 가져오는 중..." : "로딩 중...")
+                        Text(pane.isRemote ? "Fetching remote file list..." : "Loading...")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
@@ -215,17 +215,17 @@ public struct RemoteConnectingView: View {
             }
 
             VStack(spacing: 6) {
-                Text(pane.connectingMessage.isEmpty ? "SFTP 서버에 연결하는 중..." : pane.connectingMessage)
+                Text(pane.connectingMessage.isEmpty ? "Connecting to SFTP server..." : pane.connectingMessage)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.primary)
 
                 if let conn = pane.remoteConnection {
-                    Text(verbatim: "\(conn.formattedHostPort) (경로: \(pane.remotePath))")
+                    Text(verbatim: "\(conn.formattedHostPort) (path: \(pane.remotePath))")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
 
-                Text("SFTP 세션을 초기화하고 파일 목록을 가져오는 중입니다...")
+                Text("Initializing SFTP session and fetching the file list...")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
@@ -237,7 +237,7 @@ public struct RemoteConnectingView: View {
             Button(action: onCancel) {
                 HStack(spacing: 4) {
                     Image(systemName: "xmark.circle")
-                    Text("연결 취소")
+                    Text("Cancel Connection")
                 }
                 .font(.system(size: 12))
             }
@@ -264,7 +264,7 @@ public struct RemoteErrorView: View {
                 .foregroundColor(.orange)
 
             VStack(spacing: 6) {
-                Text(pane.isRemote ? "원격 서버 접속 실패" : "폴더 열기 오류")
+                Text(pane.isRemote ? "Remote connection failed" : "Could not open folder")
                     .font(.system(size: 15, weight: .bold))
 
                 Text(error)
@@ -275,14 +275,14 @@ public struct RemoteErrorView: View {
             }
 
             HStack(spacing: 10) {
-                Button("다시 시도") {
+                Button("Retry") {
                     pane.reload()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
 
                 if pane.isRemote {
-                    Button("로컬로 돌아가기") {
+                    Button("Back to Local") {
                         pane.disconnectRemote()
                     }
                     .buttonStyle(.bordered)

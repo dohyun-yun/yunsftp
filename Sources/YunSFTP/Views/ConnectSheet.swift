@@ -357,7 +357,9 @@ private struct ConnectionDetailEditorView: View {
                         .font(.system(size: 11, weight: .medium))
                         .frame(width: 80, alignment: .trailing)
                     Picker("", selection: $connection.connectionProtocol) {
-                        ForEach(ConnectionProtocol.allCases) { proto in
+                        ForEach(ConnectionProtocol.implemented.contains(connection.connectionProtocol)
+                                ? ConnectionProtocol.implemented
+                                : ConnectionProtocol.implemented + [connection.connectionProtocol]) { proto in
                             Text(proto.rawValue).tag(proto)
                         }
                     }
@@ -371,7 +373,7 @@ private struct ConnectionDetailEditorView: View {
                     Text("Server:")
                         .font(.system(size: 11, weight: .medium))
                         .frame(width: 80, alignment: .trailing)
-                    TextField("host or IP (e.g. synology.me)", text: $connection.host)
+                    TextField("host or IP (e.g. 192.168.1.10 or nas.example.com)", text: $connection.host)
                         .textFieldStyle(.roundedBorder)
 
                     Text("Port:")
@@ -420,6 +422,17 @@ private struct ConnectionDetailEditorView: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                    }
+
+                    HStack(alignment: .top) {
+                        Spacer().frame(width: 84)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Toggle("Allow legacy SSH algorithms (SHA-1 key exchange, ssh-rsa)", isOn: $connection.allowLegacyAlgorithms)
+                                .font(.system(size: 10))
+                            Text("Only for old devices that fail with \"no matching key exchange method\". Weakens security for this connection.")
+                                .font(.system(size: 9))
+                                .foregroundColor(.secondary)
+                        }
                     }
 
                     if connection.authType == .sshKey {

@@ -418,7 +418,7 @@ public struct FileListView: View {
                         }
                     } catch {
                         await MainActor.run {
-                            pane.errorMessage = "복제 실패: \(error.localizedDescription)"
+                            pane.errorMessage = "Duplicate failed: \(error.localizedDescription)"
                         }
                     }
                 }
@@ -431,7 +431,7 @@ public struct FileListView: View {
                         }
                     } catch {
                         await MainActor.run {
-                            pane.errorMessage = "복제 실패: \(error.localizedDescription)"
+                            pane.errorMessage = "Duplicate failed: \(error.localizedDescription)"
                         }
                     }
                 }

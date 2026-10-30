@@ -66,8 +66,8 @@ public actor FileSystemService {
 
     public func move(urls: [URL], to destinationDirectory: URL, overwrite: Bool = false) async throws {
         for src in urls {
-            // Avoid moving folder into itself
-            if destinationDirectory.path.hasPrefix(src.path) {
+            // Avoid moving folder into itself (component-wise, so /a/b does not block /a/bc)
+            if Self.isSameOrDescendant(destinationDirectory, of: src) {
                 throw NSError(domain: "yunsftp", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot move a folder into itself"])
             }
             var dest = destinationDirectory.appendingPathComponent(src.lastPathComponent)
@@ -134,7 +134,7 @@ public actor FileSystemService {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
         process.currentDirectoryURL = URL(fileURLWithPath: parentDir)
-        process.arguments = ["-r", zipURL.path] + itemNames
+        process.arguments = ["-r", zipURL.path, "--"] + itemNames
 
         try process.run()
         process.waitUntilExit()
@@ -206,21 +206,32 @@ public actor FileSystemService {
         )
     }
 
-    private func uniqueDestinationURL(for url: URL) -> URL {
-        guard fileManager.fileExists(atPath: url.path) else { return url }
+    static func isSameOrDescendant(_ candidate: URL, of ancestor: URL) -> Bool {
+        let a = ancestor.standardizedFileURL.pathComponents
+        let c = candidate.standardizedFileURL.pathComponents
+        return c.count >= a.count && Array(c.prefix(a.count)) == a
+    }
 
-        let parent = url.deletingLastPathComponent()
-        let ext = (url.lastPathComponent as NSString).pathExtension
-        let base = (url.lastPathComponent as NSString).deletingPathExtension
-
-        var count = 2
+    /// Where a "keep both" copy/download of `fileName` into `directory` will land. Shared by the
+    /// local copy path, SFTP downloads and the progress monitors so they all agree on the name.
+    public static func plannedDestinationURL(fileName: String, in directory: URL) -> URL {
+        // Probe through the file system so case-insensitive / normalization-insensitive volumes
+        // (default APFS) report collisions the way they will actually happen.
+        var taken = Set<String>()
+        let base = fileName.precomposedStringWithCanonicalMapping
         while true {
-            let candidateName = ext.isEmpty ? "\(base) \(count)" : "\(base) \(count).\(ext)"
-            let candidateURL = parent.appendingPathComponent(candidateName)
-            if !fileManager.fileExists(atPath: candidateURL.path) {
-                return candidateURL
+            let candidate = SFTPService.uniqueName(base, existing: taken)
+            let url = directory.appendingPathComponent(candidate)
+            // attributesOfItem does not follow symlinks, so a dangling link still counts as taken.
+            if (try? FileManager.default.attributesOfItem(atPath: url.path)) != nil {
+                taken.insert(candidate)
+            } else {
+                return url
             }
-            count += 1
         }
+    }
+
+    private func uniqueDestinationURL(for url: URL) -> URL {
+        return Self.plannedDestinationURL(fileName: url.lastPathComponent, in: url.deletingLastPathComponent())
     }
 }

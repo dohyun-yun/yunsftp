@@ -8,6 +8,9 @@ public enum ConnectionProtocol: String, CaseIterable, Identifiable, Codable, Sen
 
     public var id: String { rawValue }
 
+    /// Only SFTP has a transport today. The other cases stay for Codable compatibility.
+    public static let implemented: [ConnectionProtocol] = [.sftp]
+
     public var defaultPort: Int {
         switch self {
         case .sftp: return 22
@@ -47,6 +50,8 @@ public struct RemoteConnection: Identifiable, Codable, Hashable, Sendable {
     public var isImportedFromForkLift2: Bool
     public var lastTestedDate: Date?
     public var lastTestStatusSummary: String?
+    /// Opt-in for devices that only speak SHA-1 key exchange / ssh-rsa. Off by default.
+    public var allowLegacyAlgorithms: Bool
 
     public init(
         id: UUID = UUID(),
@@ -60,7 +65,8 @@ public struct RemoteConnection: Identifiable, Codable, Hashable, Sendable {
         keyFilePath: String = "~/.ssh/id_ed25519",
         isImportedFromForkLift2: Bool = false,
         lastTestedDate: Date? = nil,
-        lastTestStatusSummary: String? = nil
+        lastTestStatusSummary: String? = nil,
+        allowLegacyAlgorithms: Bool = false
     ) {
         self.id = id
         self.name = name.isEmpty ? (host.isEmpty ? "New Connection" : host) : name
@@ -74,6 +80,25 @@ public struct RemoteConnection: Identifiable, Codable, Hashable, Sendable {
         self.isImportedFromForkLift2 = isImportedFromForkLift2
         self.lastTestedDate = lastTestedDate
         self.lastTestStatusSummary = lastTestStatusSummary
+        self.allowLegacyAlgorithms = allowLegacyAlgorithms
+    }
+
+    // Manual decoding so connections saved before `allowLegacyAlgorithms` existed still load.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        connectionProtocol = try c.decode(ConnectionProtocol.self, forKey: .connectionProtocol)
+        host = try c.decode(String.self, forKey: .host)
+        port = try c.decode(Int.self, forKey: .port)
+        username = try c.decode(String.self, forKey: .username)
+        remotePath = try c.decode(String.self, forKey: .remotePath)
+        authType = try c.decode(AuthenticationType.self, forKey: .authType)
+        keyFilePath = try c.decode(String.self, forKey: .keyFilePath)
+        isImportedFromForkLift2 = try c.decode(Bool.self, forKey: .isImportedFromForkLift2)
+        lastTestedDate = try c.decodeIfPresent(Date.self, forKey: .lastTestedDate)
+        lastTestStatusSummary = try c.decodeIfPresent(String.self, forKey: .lastTestStatusSummary)
+        allowLegacyAlgorithms = try c.decodeIfPresent(Bool.self, forKey: .allowLegacyAlgorithms) ?? false
     }
 
     public var formattedPort: String {

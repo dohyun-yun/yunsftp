@@ -4,7 +4,7 @@ set -e
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-VERSION="v1.0.0"
+VERSION="v$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PROJECT_DIR/Resources/Info.plist")"
 BUILD_DIR="$PROJECT_DIR/build"
 APP_BUNDLE="$BUILD_DIR/yunsftp.app"
 DMG_NAME="yunsftp-${VERSION}-macos-arm64.dmg"

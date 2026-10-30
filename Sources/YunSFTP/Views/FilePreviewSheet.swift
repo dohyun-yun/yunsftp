@@ -160,7 +160,7 @@ public struct FilePreviewSheet: View {
 
             Task {
                 do {
-                    let downloadedURL = try await SFTPService.shared.download(remotePath: remotePath, to: tempDir, connection: conn, password: pwd)
+                    let downloadedURL = try await SFTPService.shared.download(remotePath: remotePath, to: tempDir, connection: conn, password: pwd, overwrite: true)
                     await MainActor.run {
                         self.localPreviewURL = downloadedURL
                         self.loadFromLocalURL(downloadedURL)
@@ -168,7 +168,7 @@ public struct FilePreviewSheet: View {
                     }
                 } catch {
                     await MainActor.run {
-                        self.errorMessage = "미리보기 다운로드 실패: \(error.localizedDescription)"
+                        self.errorMessage = "Preview download failed: \(error.localizedDescription)"
                         self.isLoading = false
                     }
                 }
@@ -223,7 +223,7 @@ public struct FilePreviewSheet: View {
             Task {
                 do {
                     try contentToSave.write(to: targetURL, atomically: true, encoding: .utf8)
-                    try await SFTPService.shared.upload(localURL: targetURL, to: remoteParent.isEmpty ? "/" : remoteParent, connection: conn, password: pwd)
+                    try await SFTPService.shared.upload(localURL: targetURL, to: remoteParent.isEmpty ? "/" : remoteParent, connection: conn, password: pwd, overwrite: true)
                     await MainActor.run {
                         hasChanges = false
                         isSaving = false
@@ -231,7 +231,7 @@ public struct FilePreviewSheet: View {
                     }
                 } catch {
                     await MainActor.run {
-                        errorMessage = "원격 저장 실패: \(error.localizedDescription)"
+                        errorMessage = "Remote save failed: \(error.localizedDescription)"
                         isSaving = false
                     }
                 }
@@ -242,7 +242,7 @@ public struct FilePreviewSheet: View {
                 hasChanges = false
                 pane?.reload()
             } catch {
-                errorMessage = "저장 실패: \(error.localizedDescription)"
+                errorMessage = "Save failed: \(error.localizedDescription)"
             }
             isSaving = false
         }

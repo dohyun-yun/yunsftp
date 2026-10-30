@@ -42,7 +42,7 @@ final class SFTPTransferAndEscapeTests: XCTestCase {
         XCTAssertFalse(pane.isRemote)
 
         let conn = RemoteConnection(
-            name: "Synology NAS",
+            name: "Home NAS",
             host: "192.168.1.100",
             port: 22,
             username: "admin",
@@ -57,7 +57,7 @@ final class SFTPTransferAndEscapeTests: XCTestCase {
         XCTAssertTrue(pane.items.isEmpty, "Existing items must be cleared immediately when connecting to remote to prevent ghost items")
         XCTAssertTrue(pane.isConnecting, "Pane must be in isConnecting state")
         XCTAssertTrue(pane.isLoading, "Pane must be in isLoading state")
-        XCTAssertEqual(pane.connectingMessage, "'Synology NAS' 서버에 연결 중...")
+        XCTAssertEqual(pane.connectingMessage, "Connecting to 'Home NAS'...")
 
         // Disconnecting must reset states
         pane.disconnectRemote()

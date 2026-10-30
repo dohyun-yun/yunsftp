@@ -25,16 +25,10 @@ public struct AppSettings: Codable, Sendable {
     public var tools: [CustomTool] = []
 
     public static let sharedStorageKey = "yunsftp_AppSettings"
-    public static let legacyStorageKey = "ForkLiftSilicon_AppSettings"
 
     public static func load() -> AppSettings {
         if let data = UserDefaults.standard.data(forKey: sharedStorageKey),
            let settings = try? JSONDecoder().decode(AppSettings.self, from: data) {
-            return settings
-        }
-        if let data = UserDefaults.standard.data(forKey: legacyStorageKey),
-           let settings = try? JSONDecoder().decode(AppSettings.self, from: data) {
-            settings.save()
             return settings
         }
         return AppSettings()

@@ -80,7 +80,7 @@ public class PaneModel: ObservableObject, Identifiable {
         self.remotePath = path
         let virtualURL = SFTPService.sftpURL(host: connection.host, port: connection.port, path: path)
         self.currentURL = virtualURL
-        self.items.removeAll() // Clear old lingering items immediately (잔상 제거)
+        self.items.removeAll() // Clear old lingering items immediately
         self.selectedItemURLs.removeAll()
         self.pinnedSelectionURLs.removeAll()
         self.selectionAnchorURL = nil
@@ -91,7 +91,7 @@ public class PaneModel: ObservableObject, Identifiable {
         self.isConnecting = true
         self.isLoading = true
         self.errorMessage = nil
-        self.connectingMessage = "'\(connection.displayTitle)' 서버에 연결 중..."
+        self.connectingMessage = "Connecting to '\(connection.displayTitle)'..."
         loadItems()
     }
 

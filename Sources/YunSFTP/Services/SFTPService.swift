@@ -54,6 +54,63 @@ public struct RemoteFileItem: Identifiable, Hashable, Sendable {
     }
 }
 
+/// Tracks the ssh/sftp/scp child processes currently running so a user cancel can stop them.
+public final class ProcessRegistry: @unchecked Sendable {
+    public static let shared = ProcessRegistry()
+    private let lock = NSLock()
+    private var processes: [ObjectIdentifier: (process: Process, isTransfer: Bool)] = [:]
+    /// Processes we signalled. sftp/scp handle SIGTERM themselves and exit "normally", so the
+    /// exit status alone cannot tell a cancel from a failure.
+    private var terminated: Set<ObjectIdentifier> = []
+
+    // Keyed by object identity so registering before run() is safe even if the child exits
+    // (and the termination handler fires) immediately. `isTransfer` marks get/put/scp children;
+    // listings, renames and deletes are never killed by a transfer cancel.
+    func register(_ p: Process, isTransfer: Bool) { lock.lock(); processes[ObjectIdentifier(p)] = (p, isTransfer); lock.unlock() }
+    func unregister(_ p: Process) { lock.lock(); processes.removeValue(forKey: ObjectIdentifier(p)); lock.unlock() }
+
+    /// True once per process if `terminateAll()` signalled it. Delivering the cancel to a running
+    /// transfer also clears the pending flag, so it cannot leak into a later transfer.
+    func consumeTerminated(_ p: Process) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        let hit = terminated.remove(ObjectIdentifier(p)) != nil
+        if hit { pendingCancelAt = nil }
+        return hit
+    }
+
+    /// Set by `requestCancel()`. A transfer process that starts while it is pending (the cancel
+    /// arrived during name probing / askpass setup) aborts before it runs.
+    private var pendingCancelAt: Date?
+    private let pendingCancelTTL: TimeInterval = 15
+
+    public func requestCancel() {
+        lock.lock(); pendingCancelAt = Date(); lock.unlock()
+        terminateAll()
+    }
+
+    public func clearPendingCancel() { lock.lock(); pendingCancelAt = nil; lock.unlock() }
+
+    func consumePendingCancel() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard let at = pendingCancelAt else { return false }
+        pendingCancelAt = nil
+        // ponytail: TTL guards against a cancel nobody consumed (single download, last batch item);
+        // per-batch tokens would make this exact.
+        return Date().timeIntervalSince(at) < pendingCancelTTL
+    }
+
+    /// Sends SIGTERM to every running transfer child. Returns how many were signalled.
+    @discardableResult
+    public func terminateAll() -> Int {
+        lock.lock()
+        let running = processes.values.filter { $0.isTransfer && $0.process.isRunning }.map { $0.process }
+        running.forEach { terminated.insert(ObjectIdentifier($0)) }
+        lock.unlock()
+        running.forEach { $0.terminate() }
+        return running.count
+    }
+}
+
 public actor SFTPService {
     public static let shared = SFTPService()
 
@@ -85,6 +142,20 @@ public actor SFTPService {
             return url
         }
         return URL(fileURLWithPath: cleanPath)
+    }
+
+    /// "name.ext" -> "name 2.ext", "name 3.ext", ... until it is not in `existing`.
+    /// Mirrors the local copy behaviour so SFTP transfers never silently overwrite.
+    public static func uniqueName(_ name: String, existing: Set<String>) -> String {
+        guard existing.contains(name) else { return name }
+        let ext = (name as NSString).pathExtension
+        let base = (name as NSString).deletingPathExtension
+        var count = 2
+        while true {
+            let candidate = ext.isEmpty ? "\(base) \(count)" : "\(base) \(count).\(ext)"
+            if !existing.contains(candidate) { return candidate }
+            count += 1
+        }
     }
 
     /// POSIX single-quote escaping for remote SSH commands
@@ -160,19 +231,36 @@ public actor SFTPService {
         return String(decoding: utf8Bytes, as: UTF8.self).precomposedStringWithCanonicalMapping
     }
 
-    private func commonSSHOptions(port: Int) -> [String] {
+    /// Shared OpenSSH options. Host keys are verified against the default known_hosts file
+    /// (trust-on-first-use via `accept-new`); algorithms are left at OpenSSH defaults.
+    /// Sessions are multiplexed through a ControlMaster socket so each operation does not
+    /// pay for a new handshake + authentication.
+    static let controlPath: String = (NSTemporaryDirectory() as NSString).appendingPathComponent("ys-%C")
+
+    /// Appended only when the connection opts in. These re-enable algorithms OpenSSH disabled
+    /// for good reasons (SHA-1); use them only for devices that cannot be updated.
+    static let legacySSHOptions: [String] = [
+        "-o", "KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha256",
+        "-o", "HostkeyAlgorithms=+ssh-rsa",
+        "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa"
+    ]
+
+    static func sshOptions(for connection: RemoteConnection) -> [String] {
+        return connection.allowLegacyAlgorithms ? commonSSHOptions + legacySSHOptions : commonSSHOptions
+    }
+
+    static var commonSSHOptions: [String] {
         return [
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "StrictHostKeyChecking=accept-new",
             "-o", "ConnectTimeout=10",
             "-o", "ServerAliveInterval=15",
             "-o", "ServerAliveCountMax=3",
-            "-o", "PubkeyAcceptedKeyTypes=+ssh-rsa,ssh-ed25519",
-            "-o", "HostkeyAlgorithms=+ssh-rsa,ssh-ed25519",
-            "-o", "KexAlgorithms=+curve25519-sha256,diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha256",
             "-o", "PreferredAuthentications=publickey,password,keyboard-interactive",
             "-o", "NumberOfPasswordPrompts=1",
-            "-o", "BatchMode=no"
+            "-o", "BatchMode=no",
+            "-o", "ControlMaster=auto",
+            "-o", "ControlPath=\(controlPath)",
+            "-o", "ControlPersist=60"
         ]
     }
 
@@ -200,7 +288,7 @@ public actor SFTPService {
             if !items.isEmpty || sftpOutput.contains("total") || sftpOutput.contains("drwx") || sftpOutput.contains("-rw") || sftpOutput.contains("sftp>") {
                 return items
             }
-        } catch {
+        } catch where !Self.isFatal(error) {
             // If cd failed in SFTP, try direct 'ls -la "path"' via SFTP batch
             do {
                 let fallbackOutput = try await executeSFTPBatch(commands: ["ls -la \(Self.sftpQuote(targetPath))"], connection: connection, password: password)
@@ -208,7 +296,7 @@ public actor SFTPService {
                 if !items.isEmpty || fallbackOutput.contains("total") || fallbackOutput.contains("drwx") || fallbackOutput.contains("-rw") || fallbackOutput.contains("sftp>") {
                     return items
                 }
-            } catch {
+            } catch where !Self.isFatal(error) {
                 if connection.host == "local-sftp-server" {
                     throw error
                 }
@@ -232,54 +320,47 @@ public actor SFTPService {
         return nil
     }
 
-    public func download(remotePath: String, to localDirectory: URL, connection: RemoteConnection, password: String?) async throws -> URL {
+    /// Downloads `remotePath` into `localDirectory`. Unless `overwrite` is set, an existing
+    /// local item with the same name is kept and the download gets a " 2" suffix. A failed or
+    /// cancelled download never leaves a partial file behind (for the non-overwrite case).
+    public func download(remotePath: String, to localDirectory: URL, connection: RemoteConnection, password: String?, overwrite: Bool = false) async throws -> URL {
         let cleanRemotePath = Self.normalizeRemotePath(remotePath)
         let fileName = (cleanRemotePath as NSString).lastPathComponent
         let parentDir = (cleanRemotePath as NSString).deletingLastPathComponent
         let remoteParent = parentDir.isEmpty ? "/" : parentDir
-        let localDestURL = localDirectory.appendingPathComponent(fileName)
         let effectivePwd = resolvePassword(password: password, connection: connection)
 
         try? FileManager.default.createDirectory(at: localDirectory, withIntermediateDirectories: true)
 
-        let destPath = localDestURL.path.precomposedStringWithCanonicalMapping
+        let localDestURL = overwrite
+            ? localDirectory.appendingPathComponent(fileName)
+            : FileSystemService.plannedDestinationURL(fileName: fileName, in: localDirectory)
+        let destName = localDestURL.lastPathComponent
+        let discardPartial = { if !overwrite { try? FileManager.default.removeItem(at: localDestURL) } }
 
-        // 1. Primary: SFTP batch using lcd (local dest) + cd (remote parent) + get -R (filename)
-        let sftpCommands: [String] = [
-            "lcd \(Self.sftpQuote(localDirectory.path))",
-            "cd \(Self.sftpQuote(remoteParent))",
-            "get -R \(Self.sftpQuote(fileName))"
+        let batchAttempts: [[String]] = [
+            // 1. lcd (local dest) + cd (remote parent) + get -R (filename) -> respects chroot shares
+            ["lcd \(Self.sftpQuote(localDirectory.path))", "cd \(Self.sftpQuote(remoteParent))", "get -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(destName))"],
+            // 2. direct get with the full remote path if the cd failed
+            ["lcd \(Self.sftpQuote(localDirectory.path))", "get -R \(Self.sftpQuote(cleanRemotePath)) \(Self.sftpQuote(destName))"]
         ]
-        do {
-            _ = try await executeSFTPBatch(commands: sftpCommands, connection: connection, password: effectivePwd)
-        } catch {
-            if FileManager.default.fileExists(atPath: destPath) || FileManager.default.fileExists(atPath: localDestURL.path) {
-                return localDestURL
+        for commands in batchAttempts {
+            do {
+                _ = try await executeSFTPBatch(commands: commands, connection: connection, password: effectivePwd, isTransfer: true)
+                if FileManager.default.fileExists(atPath: localDestURL.path) {
+                    return localDestURL
+                }
+            } catch where !Self.isFatal(error) {
+                discardPartial()
+            } catch {
+                discardPartial()
+                throw error
             }
-        }
-        if FileManager.default.fileExists(atPath: destPath) || FileManager.default.fileExists(atPath: localDestURL.path) {
-            return localDestURL
-        }
-
-        // 2. Direct get with quotes if remoteParent cd failed
-        let directCmds = [
-            "lcd \(Self.sftpQuote(localDirectory.path))",
-            "get -R \(Self.sftpQuote(cleanRemotePath))"
-        ]
-        do {
-            _ = try await executeSFTPBatch(commands: directCmds, connection: connection, password: effectivePwd)
-        } catch {
-            if FileManager.default.fileExists(atPath: destPath) || FileManager.default.fileExists(atPath: localDestURL.path) {
-                return localDestURL
-            }
-        }
-        if FileManager.default.fileExists(atPath: destPath) || FileManager.default.fileExists(atPath: localDestURL.path) {
-            return localDestURL
         }
 
         // 3. Fallback to scp (quoting remoteSpec for remote shell execution)
         var args = ["-P", "\(connection.port)"]
-        args.append(contentsOf: commonSSHOptions(port: connection.port))
+        args.append(contentsOf: Self.sshOptions(for: connection))
 
         if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
             let expandedKey = (connection.keyFilePath as NSString).expandingTildeInPath
@@ -290,42 +371,55 @@ public actor SFTPService {
         let remoteSpec = "\(userPart)\(connection.host):\(Self.posixShellEscape(cleanRemotePath))"
         args.append(contentsOf: ["-r", remoteSpec, localDestURL.path])
 
-        _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd)
+        do {
+            _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd, isTransfer: true)
+        } catch {
+            discardPartial()
+            throw error
+        }
 
-        if !FileManager.default.fileExists(atPath: destPath) && !FileManager.default.fileExists(atPath: localDestURL.path) {
+        guard FileManager.default.fileExists(atPath: localDestURL.path) else {
             throw NSError(domain: "SFTPService", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "파일 다운로드 실패: 대상 파일이 로컬에 저장되지 않았습니다 (\(fileName))."
+                NSLocalizedDescriptionKey: "Download failed: \(fileName) was not written to the local destination."
             ])
         }
         return localDestURL
     }
 
-    public func upload(localURL: URL, to remoteDirectoryPath: String, connection: RemoteConnection, password: String?) async throws {
+    /// Uploads `localURL` into `remoteDirectoryPath`. Unless `overwrite` is set, an existing
+    /// remote item with the same name is kept and the upload gets a " 2" suffix.
+    public func upload(localURL: URL, to remoteDirectoryPath: String, connection: RemoteConnection, password: String?, overwrite: Bool = false) async throws {
         let cleanRemoteDir = Self.normalizeRemotePath(remoteDirectoryPath)
         let fileName = localURL.lastPathComponent.precomposedStringWithCanonicalMapping
         let localParentDir = localURL.deletingLastPathComponent().path
         let effectivePwd = resolvePassword(password: password, connection: connection)
 
+        var remoteName = fileName
+        if !overwrite {
+            remoteName = try await uniqueRemoteName(fileName, in: cleanRemoteDir, connection: connection, password: effectivePwd)
+        }
+        let remoteDest = cleanRemoteDir == "/" ? "/\(remoteName)" : "\(cleanRemoteDir)/\(remoteName)"
+
         // 1. Primary: SFTP batch using lcd (local parent) + cd (remote dir) + put -R (filename)
         let sftpCommands: [String] = [
             "lcd \(Self.sftpQuote(localParentDir))",
             "cd \(Self.sftpQuote(cleanRemoteDir))",
-            "put -R \(Self.sftpQuote(fileName))"
+            "put -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(remoteName))"
         ]
         do {
-            _ = try await executeSFTPBatch(commands: sftpCommands, connection: connection, password: effectivePwd)
-        } catch {
+            _ = try await executeSFTPBatch(commands: sftpCommands, connection: connection, password: effectivePwd, isTransfer: true)
+        } catch where !Self.isFatal(error) {
             // 2. Direct put with remote path
             let directCmds = [
                 "lcd \(Self.sftpQuote(localParentDir))",
-                "put -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(cleanRemoteDir))"
+                "put -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(remoteDest))"
             ]
             do {
-                _ = try await executeSFTPBatch(commands: directCmds, connection: connection, password: effectivePwd)
-            } catch {
+                _ = try await executeSFTPBatch(commands: directCmds, connection: connection, password: effectivePwd, isTransfer: true)
+            } catch where !Self.isFatal(error) {
                 // 3. Fallback to scp (quoting remoteDest for remote shell execution)
                 var args = ["-P", "\(connection.port)"]
-                args.append(contentsOf: commonSSHOptions(port: connection.port))
+                args.append(contentsOf: Self.sshOptions(for: connection))
 
                 if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
                     let expandedKey = (connection.keyFilePath as NSString).expandingTildeInPath
@@ -333,10 +427,35 @@ public actor SFTPService {
                 }
 
                 let userPart = connection.username.isEmpty ? "" : "\(connection.username)@"
-                let remoteDest = "\(userPart)\(connection.host):\(Self.posixShellEscape(cleanRemoteDir))"
-                args.append(contentsOf: ["-r", localURL.path, remoteDest])
+                let remoteSpec = "\(userPart)\(connection.host):\(Self.posixShellEscape(remoteDest))"
+                args.append(contentsOf: ["-r", localURL.path, remoteSpec])
 
-                _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd)
+                _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd, isTransfer: true)
+            }
+        }
+    }
+
+    /// True when `remotePath` exists (file or directory). Only an explicit "not found" means
+    /// absent; auth failures, timeouts, permission errors and cancellation propagate.
+    func remoteExists(_ remotePath: String, connection: RemoteConnection, password: String?) async throws -> Bool {
+        do {
+            _ = try await executeSFTPBatch(commands: ["ls -la \(Self.sftpQuote(remotePath))"], connection: connection, password: password)
+            return true
+        } catch where Self.isNotFound(error) {
+            return false
+        }
+    }
+
+    /// Probes only the candidate names ("name", "name 2", ...) instead of listing the directory.
+    func uniqueRemoteName(_ fileName: String, in remoteDir: String, connection: RemoteConnection, password: String?) async throws -> String {
+        var taken = Set<String>()
+        while true {
+            let candidate = Self.uniqueName(fileName, existing: taken)
+            let path = remoteDir == "/" ? "/\(candidate)" : "\(remoteDir)/\(candidate)"
+            if try await remoteExists(path, connection: connection, password: password) {
+                taken.insert(candidate)
+            } else {
+                return candidate
             }
         }
     }
@@ -356,11 +475,11 @@ public actor SFTPService {
         do {
             _ = try await executeSFTPBatch(commands: cmds, connection: connection, password: effectivePwd)
             return
-        } catch {
+        } catch where !Self.isFatal(error) {
             do {
                 _ = try await executeSFTPBatch(commands: ["mkdir \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
                 return
-            } catch {
+            } catch where !Self.isFatal(error) {
                 if connection.host == "local-sftp-server" {
                     throw error
                 }
@@ -386,18 +505,9 @@ public actor SFTPService {
             do {
                 _ = try await executeSFTPBatch(commands: cdRmCmds, connection: connection, password: effectivePwd)
                 return
-            } catch {
-                do {
-                    _ = try await executeSFTPBatch(commands: ["rm \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
-                    return
-                } catch {
-                    if connection.host == "local-sftp-server" {
-                        throw error
-                    }
-                    // Fallback to SSH only if file actually exists in SSH namespace (never blind rm -f!)
-                    let cmd = "test -e \(Self.posixShellEscape(nfc)) && rm -f \(Self.posixShellEscape(nfc))"
-                    _ = try await executeSSH(command: cmd, connection: connection, password: effectivePwd)
-                }
+            } catch where !Self.isFatal(error) {
+                _ = try await executeSFTPBatch(commands: ["rm \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
+                return
             }
         } else {
             let cdRmdirCmds = [
@@ -407,17 +517,9 @@ public actor SFTPService {
             do {
                 _ = try await executeSFTPBatch(commands: cdRmdirCmds, connection: connection, password: effectivePwd)
                 return
-            } catch {
-                do {
-                    try await removeDirectoryRecursivelySFTP(remotePath: nfc, connection: connection, password: effectivePwd)
-                    return
-                } catch {
-                    if connection.host == "local-sftp-server" {
-                        throw error
-                    }
-                    let cmd = "test -d \(Self.posixShellEscape(nfc)) && rm -rf \(Self.posixShellEscape(nfc))"
-                    _ = try await executeSSH(command: cmd, connection: connection, password: effectivePwd)
-                }
+            } catch where !Self.isFatal(error) {
+                // Deletion stays inside the SFTP subsystem on purpose: no recursive shell removal.
+                try await removeDirectoryRecursivelySFTP(remotePath: nfc, connection: connection, password: effectivePwd)
             }
         }
     }
@@ -442,7 +544,7 @@ public actor SFTPService {
             }
             do {
                 _ = try await executeSFTPBatch(commands: batchCmds, connection: connection, password: password)
-            } catch {
+            } catch where !Self.isFatal(error) {
                 // Fallback to individual removal if batch had a hiccup
                 for f in files {
                     try await remove(remotePath: f.remotePath, isDirectory: false, connection: connection, password: password)
@@ -460,7 +562,7 @@ public actor SFTPService {
         ]
         do {
             _ = try await executeSFTPBatch(commands: cmds, connection: connection, password: password)
-        } catch {
+        } catch where !Self.isFatal(error) {
             _ = try await executeSFTPBatch(commands: ["rmdir \(Self.sftpQuote(nfc))"], connection: connection, password: password)
         }
     }
@@ -485,7 +587,7 @@ public actor SFTPService {
             do {
                 _ = try await executeSFTPBatch(commands: cmds, connection: connection, password: effectivePwd)
                 return
-            } catch {
+            } catch where !Self.isFatal(error) {
                 // Fallback to full path rename below
             }
         }
@@ -493,7 +595,7 @@ public actor SFTPService {
         do {
             _ = try await executeSFTPBatch(commands: ["rename \(Self.sftpQuote(nfcSrc)) \(Self.sftpQuote(nfcDst))"], connection: connection, password: effectivePwd)
             return
-        } catch {
+        } catch where !Self.isFatal(error) {
             if connection.host == "local-sftp-server" {
                 throw error
             }
@@ -517,11 +619,11 @@ public actor SFTPService {
             do {
                 _ = try await executeSFTPBatch(commands: cmds, connection: connection, password: effectivePwd)
                 return
-            } catch {
+            } catch where !Self.isFatal(error) {
                 do {
                     _ = try await executeSFTPBatch(commands: ["chmod \(mode) \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
                     return
-                } catch {
+                } catch where !Self.isFatal(error) {
                     if connection.host == "local-sftp-server" {
                         throw error
                     }
@@ -538,7 +640,7 @@ public actor SFTPService {
         let cmd = "test -e \(Self.posixShellEscape(nfc)) && chmod \(recFlag)\(mode) \(Self.posixShellEscape(nfc))"
         do {
             _ = try await executeSSH(command: cmd, connection: connection, password: effectivePwd)
-        } catch {
+        } catch where !Self.isFatal(error) {
             _ = try await executeSFTPBatch(commands: ["chmod \(mode) \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
         }
     }
@@ -581,7 +683,7 @@ public actor SFTPService {
     private func executeSSH(command: String, connection: RemoteConnection, password: String?) async throws -> String {
         let effectivePwd = resolvePassword(password: password, connection: connection)
         var args = ["-p", "\(connection.port)"]
-        args.append(contentsOf: commonSSHOptions(port: connection.port))
+        args.append(contentsOf: Self.sshOptions(for: connection))
 
         if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
             let expandedKey = (connection.keyFilePath as NSString).expandingTildeInPath
@@ -595,7 +697,7 @@ public actor SFTPService {
         return try await runProcess(executable: "/usr/bin/ssh", arguments: args, password: effectivePwd)
     }
 
-    private func executeSFTPBatch(commands: [String], connection: RemoteConnection, password: String?) async throws -> String {
+    private func executeSFTPBatch(commands: [String], connection: RemoteConnection, password: String?, isTransfer: Bool = false) async throws -> String {
         let effectivePwd = resolvePassword(password: password, connection: connection)
         var args: [String] = []
         if connection.host == "local-sftp-server" {
@@ -603,7 +705,7 @@ public actor SFTPService {
             args.append(contentsOf: ["-D", sftpServerPath, "-b", "-", "dummy"])
         } else {
             args.append(contentsOf: ["-P", "\(connection.port)"])
-            args.append(contentsOf: commonSSHOptions(port: connection.port))
+            args.append(contentsOf: Self.sshOptions(for: connection))
             args.append(contentsOf: ["-b", "-"])
 
             if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
@@ -616,10 +718,32 @@ public actor SFTPService {
         }
 
         let inputString = commands.joined(separator: "\n") + "\nexit\n"
-        return try await runProcess(executable: "/usr/bin/sftp", arguments: args, inputData: inputString.data(using: .utf8), password: effectivePwd)
+        return try await runProcess(executable: "/usr/bin/sftp", arguments: args, inputData: inputString.data(using: .utf8), password: effectivePwd, isTransfer: isTransfer)
     }
 
-    private func runProcess(executable: String, arguments: [String], inputData: Data? = nil, password: String?) async throws -> String {
+    /// Creates the SSH_ASKPASS helper in the per-user temp dir with open(O_CREAT|O_EXCL, 0700),
+    /// so the file never exists with a wider mode, and removes it after the process exits.
+    /// The password is base64-wrapped only to survive shell quoting.
+    static func writeAskpassScript(password: String) throws -> URL {
+        let base64Pwd = Data(password.utf8).base64EncodedString()
+        let script = "#!/bin/sh\necho \"\(base64Pwd)\" | /usr/bin/base64 -d\n"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("askpass_\(UUID().uuidString).sh")
+        let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL, 0o700)
+        guard fd >= 0 else {
+            throw NSError(domain: "SFTPService", code: 3, userInfo: [NSLocalizedDescriptionKey: "Could not create the password helper"])
+        }
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        do {
+            try handle.write(contentsOf: Data(script.utf8))
+            try handle.close()
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            throw error
+        }
+        return url
+    }
+
+    func runProcess(executable: String, arguments: [String], inputData: Data? = nil, password: String?, isTransfer: Bool = false) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
@@ -630,16 +754,9 @@ public actor SFTPService {
         environment["LC_CTYPE"] = "UTF-8"
         var tempAskPassURL: URL? = nil
 
-        // If password is provided, set up secure base64 SSH_ASKPASS script
+        // If password is provided, hand it to ssh through a one-shot SSH_ASKPASS helper
         if let pwd = password, !pwd.isEmpty {
-            let base64Pwd = Data(pwd.utf8).base64EncodedString()
-            let askpassScript = """
-            #!/bin/sh
-            echo "\(base64Pwd)" | /usr/bin/base64 -d
-            """
-            let tmpScript = FileManager.default.temporaryDirectory.appendingPathComponent("askpass_\(UUID().uuidString).sh")
-            try? askpassScript.write(to: tmpScript, atomically: true, encoding: .utf8)
-            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: tmpScript.path)
+            let tmpScript = try Self.writeAskpassScript(password: pwd)
             tempAskPassURL = tmpScript
 
             environment["SSH_ASKPASS"] = tmpScript.path
@@ -672,7 +789,8 @@ public actor SFTPService {
 
         do {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                process.terminationHandler = { _ in
+                process.terminationHandler = { p in
+                    ProcessRegistry.shared.unregister(p)
                     procState.lock.lock()
                     defer { procState.lock.unlock() }
                     if !procState.resumed {
@@ -681,12 +799,17 @@ public actor SFTPService {
                     }
                 }
                 do {
+                    if isTransfer && ProcessRegistry.shared.consumePendingCancel() {
+                        throw NSError(domain: "SFTPService", code: Self.cancellationCode, userInfo: [NSLocalizedDescriptionKey: "Transfer cancelled."])
+                    }
+                    ProcessRegistry.shared.register(process, isTransfer: isTransfer)
                     try process.run()
                     if let input = inputData {
                         stdinPipe.fileHandleForWriting.write(input)
                     }
                     try? stdinPipe.fileHandleForWriting.close()
                 } catch {
+                    ProcessRegistry.shared.unregister(process)
                     procState.lock.lock()
                     defer { procState.lock.unlock() }
                     if !procState.resumed {
@@ -703,15 +826,33 @@ public actor SFTPService {
                 try? FileManager.default.removeItem(at: tmp)
             }
 
-            let output = String(data: outData, encoding: .utf8) ?? ""
-            let errorMsg = String(data: errData, encoding: .utf8) ?? ""
+            // sftp prints remote names in error messages as a mix of raw bytes and octal escapes,
+            // which is often not valid UTF-8. Decode lossily instead of dropping the whole message.
+            let output = String(decoding: outData, as: UTF8.self)
+            let errorMsg = String(decoding: errData, as: UTF8.self)
+
+            if ProcessRegistry.shared.consumeTerminated(process) {
+                throw NSError(domain: "SFTPService", code: Self.cancellationCode, userInfo: [
+                    NSLocalizedDescriptionKey: "Transfer cancelled."
+                ])
+            }
+            if process.terminationReason == .uncaughtSignal {
+                let detail = errorMsg.trimmingCharacters(in: .whitespacesAndNewlines)
+                throw NSError(domain: "SFTPService", code: Self.signalTerminationCode, userInfo: [
+                    NSLocalizedDescriptionKey: "\((executable as NSString).lastPathComponent) was terminated by signal \(process.terminationStatus)." + (detail.isEmpty ? "" : " \(detail)"),
+                    "signal": Int(process.terminationStatus)
+                ])
+            }
 
             if process.terminationStatus != 0 {
                 let cleanErr = errorMsg.components(separatedBy: .newlines)
                     .filter { !$0.contains("WARNING") && !$0.isEmpty }
                     .joined(separator: " ")
                 let friendly = Self.translateErrorMessage(cleanErr, exitCode: Int(process.terminationStatus))
-                throw NSError(domain: "SFTPService", code: Int(process.terminationStatus), userInfo: [
+                let code = Self.isAuthenticationFailureText(cleanErr) ? Self.authenticationFailureCode
+                    : Self.isNotFoundText(cleanErr) ? Self.notFoundCode
+                    : Int(process.terminationStatus)
+                throw NSError(domain: "SFTPService", code: code, userInfo: [
                     NSLocalizedDescriptionKey: friendly
                 ])
             }
@@ -725,39 +866,106 @@ public actor SFTPService {
         }
     }
 
+    /// Error code used when the SSH server rejected the credentials. Callers must not retry
+    /// with alternative transports on this error: every retry is another failed login that
+    /// can trigger fail2ban / NAS auto-block.
+    static let authenticationFailureCode = -1001
+
+    /// Error code used when the child process was terminated by a signal (user cancel).
+    static let cancellationCode = -1002
+
+    static func isCancellation(_ error: Error) -> Bool {
+        let ns = error as NSError
+        return ns.domain == "SFTPService" && ns.code == cancellationCode
+    }
+
+    /// Error code used when ssh/sftp reported that the remote path does not exist.
+    static let notFoundCode = -1003
+
+    static func isNotFound(_ error: Error) -> Bool {
+        let ns = error as NSError
+        return ns.domain == "SFTPService" && ns.code == notFoundCode
+    }
+
+    static func isConnectionErrorText(_ rawError: String) -> Bool {
+        let lower = rawError.lowercased()
+        return ["connection reset", "connection refused", "timed out", "timeout", "no route to host", "host is down",
+                "host key verification failed", "remote host identification has changed", "no matching"]
+            .contains { lower.contains($0) }
+    }
+
+    /// Only sftp's own "path missing" messages count, and never when the session itself failed
+    /// (ssh also says "No such file or directory" about a missing identity file).
+    static func isNotFoundText(_ rawError: String) -> Bool {
+        guard !isConnectionErrorText(rawError) else { return false }
+        let lower = rawError.lowercased()
+        return lower.contains("can't ls:") || lower.contains("couldn't stat") || lower.contains("can't change directory")
+            || lower.contains("not found") || lower.contains("no such file or directory")
+    }
+
+    /// Errors that must never trigger a transport fallback: a rejected login (every retry is
+    /// another failed login) and a user cancel (a retry would silently finish the transfer).
+    static func isFatal(_ error: Error) -> Bool {
+        return isAuthenticationFailure(error) || isCancellation(error)
+    }
+
+    /// Error code used when ssh/sftp died from a signal nobody in the app sent.
+    static let signalTerminationCode = -1004
+
+    static func isAuthenticationFailure(_ error: Error) -> Bool {
+        let ns = error as NSError
+        return ns.domain == "SFTPService" && ns.code == authenticationFailureCode
+    }
+
+    static func isAuthenticationFailureText(_ rawError: String) -> Bool {
+        let lower = rawError.lowercased()
+        return lower.contains("permission denied (publickey") ||
+            lower.contains("permission denied (password") ||
+            lower.contains("permission denied (keyboard-interactive") ||
+            lower.contains("authentication failed") ||
+            lower.contains("too many authentication failures")
+    }
+
     static func translateErrorMessage(_ rawError: String, exitCode: Int) -> String {
         let lower = rawError.lowercased()
 
+        // 0. Host key mismatch (possible MITM or reinstalled server)
+        if lower.contains("remote host identification has changed") || lower.contains("host key verification failed") {
+            return "Host key verification failed: the server's key does not match the one saved in ~/.ssh/known_hosts. If the server was reinstalled, remove its entry with `ssh-keygen -R <host>`; otherwise the connection may be intercepted."
+        }
+
+        // 0b. Algorithm negotiation failure (old device)
+        if lower.contains("no matching key exchange method") || lower.contains("no matching host key type") || lower.contains("no matching cipher") {
+            return "The server only offers outdated SSH algorithms that OpenSSH disables by default. If you trust this device and cannot update it, enable \"Allow legacy SSH algorithms\" in the connection settings."
+        }
+
         // 1. Connection-level errors
         if lower.contains("connection reset") {
-            return "서버에서 연결을 종료했습니다 (Connection reset). 비밀번호 입력 여부 및 SFTP 포트/방화벽 설정을 확인해주세요."
+            return "The server closed the connection (connection reset). Check the credentials, SFTP port and firewall settings."
         } else if lower.contains("connection refused") {
-            return "서버에서 연결이 거부되었습니다 (Connection refused). SSH/SFTP 서비스 상태와 포트 번호를 확인해주세요."
+            return "Connection refused. Check that the SSH/SFTP service is running and the port number is correct."
         } else if lower.contains("timed out") || lower.contains("timeout") {
-            return "연결 시간 초과 (Connection timed out). 서버 주소 및 네트워크 상태를 확인해주세요."
+            return "Connection timed out. Check the server address and your network connection."
         } else if lower.contains("host is down") || lower.contains("no route to host") {
-            return "서버 호스트에 접근할 수 없습니다 (No route to host)."
+            return "Host unreachable (no route to host)."
         }
 
         // 2. Authentication failure (strictly when SSH/SFTP rejects login credentials)
-        if lower.contains("permission denied (publickey") ||
-           lower.contains("permission denied (password") ||
-           lower.contains("permission denied (keyboard-interactive") ||
-           lower.contains("authentication failed") {
-            return "인증 실패: 사용자명 또는 비밀번호가 올바르지 않습니다 (Permission denied)."
+        if isAuthenticationFailureText(rawError) {
+            return "Authentication failed: the username or password is incorrect (permission denied)."
         }
 
         // 3. File or Directory permission denial (e.g. ls, cd, get, put failed due to filesystem permissions)
         if lower.contains("permission denied") {
-            return "접근 권한이 없습니다 (Permission denied). 대상 폴더 또는 파일의 읽기/쓰기 권한을 확인해주세요."
+            return "Permission denied. Check the read/write permissions of the target file or folder."
         }
 
         // 4. File or Directory not found
-        if lower.contains("no such file or directory") || lower.contains("couldn't stat") || lower.contains("not found") {
-            return "경로를 찾을 수 없습니다 (No such file or directory). 폴더가 존재하지 않거나 이름이 변경되었습니다."
+        if isNotFoundText(rawError) {
+            return "Path not found (no such file or directory). The folder may have been moved or renamed."
         }
 
-        return rawError.isEmpty ? "SSH/SFTP 명령 실행 실패 (코드 \(exitCode))" : rawError
+        return rawError.isEmpty ? "SSH/SFTP command failed (exit code \(exitCode))" : rawError
     }
 
     static func extractLsColumns(from line: String) -> (tokens: [Substring], fileName: String)? {
@@ -836,7 +1044,7 @@ public actor SFTPService {
 
             // Parse date if possible (parts 5, 6, 7)
             let dateStr = "\(parts[5]) \(parts[6]) \(parts[7])"
-            let modDate = Self.parseLsDate(dateStr) ?? Date()
+            let modDate = Self.parseLsDate(dateStr, now: Date()) ?? Date()
 
             let item = RemoteFileItem(
                 name: name,
@@ -853,17 +1061,22 @@ public actor SFTPService {
         return items
     }
 
-    private static func parseLsDate(_ string: String) -> Date? {
+    static func parseLsDate(_ string: String, now: Date) -> Date? {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
 
-        // Format 1: "Oct 13 14:00"
+        // Format 1: "Oct 13 14:00" (ls omits the year for the last ~6 months). Assume the
+        // current year, but a resulting date in the future means it was last year.
         formatter.dateFormat = "MMM d HH:mm"
         if let d = formatter.date(from: string) {
             let calendar = Calendar.current
             var components = calendar.dateComponents([.month, .day, .hour, .minute], from: d)
-            components.year = calendar.component(.year, from: Date())
-            return calendar.date(from: components)
+            components.year = calendar.component(.year, from: now)
+            guard let candidate = calendar.date(from: components) else { return nil }
+            if candidate > now.addingTimeInterval(86_400) {
+                return calendar.date(byAdding: .year, value: -1, to: candidate)
+            }
+            return candidate
         }
 
         // Format 2: "Oct 13 2024"

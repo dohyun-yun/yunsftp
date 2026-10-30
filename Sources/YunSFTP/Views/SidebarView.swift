@@ -48,6 +48,20 @@ public struct SidebarView: View {
                 }
             ) {
                 if connectionManager.connections.isEmpty {
+                    if FileManager.default.fileExists(atPath: SSHConfigImporter.userConfigURL.path) {
+                        Button(action: { _ = connectionManager.importFromSSHConfig() }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "square.and.arrow.down")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                Text("Import from ~/.ssh/config")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.vertical, 2)
+                    }
                     Button(action: onManageConnections) {
                         HStack(spacing: 6) {
                             Image(systemName: "plus.circle")

@@ -81,13 +81,21 @@ public struct ConnectSheet: View {
 
                 Divider()
 
-                // Bottom import button
+                // Bottom import menu
                 VStack(spacing: 4) {
-                    Button(action: importFromForkLift2) {
-                        Label("Import from ForkLift 2", systemImage: "arrow.down.doc")
+                    Menu {
+                        Button("SSH config (~/.ssh/config)") { report(connectionManager.importFromSSHConfig()) }
+                            .disabled(!FileManager.default.fileExists(atPath: SSHConfigImporter.userConfigURL.path))
+                        Button("Cyberduck bookmarks") { report(connectionManager.importFromCyberduck()) }
+                            .disabled(!FileManager.default.fileExists(atPath: CyberduckImporter.bookmarksDirectory.path))
+                        Button("ForkLift 2 bookmarks") { importFromForkLift2() }
+                            .disabled(!MigrationService.shared.hasForkLift2Data())
+                    } label: {
+                        Label("Import…", systemImage: "arrow.down.doc")
                             .font(.system(size: 11))
                     }
-                    .buttonStyle(.plain)
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
                     .padding(.vertical, 6)
 
                     if let msg = importMessage {
@@ -246,6 +254,11 @@ public struct ConnectSheet: View {
                 self.isTesting = false
             }
         }
+    }
+
+    private func report(_ added: Int) {
+        importMessage = added > 0 ? "Imported \(added) connections!" : "Nothing new to import."
+        if added > 0 { selectedConnectionId = connectionManager.connections.last?.id }
     }
 
     private func importFromForkLift2() {

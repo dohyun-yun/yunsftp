@@ -19,3 +19,16 @@ final class RepositoryHygieneTests: XCTestCase {
         }
     }
 }
+
+extension RepositoryHygieneTests {
+    /// User-facing strings are English only (localization, if added, goes through String(localized:)).
+    func testNoHangulInSources() throws {
+        let files = try XCTUnwrap(FileManager.default.enumerator(at: sourcesRoot, includingPropertiesForKeys: nil))
+        let hangul = try NSRegularExpression(pattern: "[가-힣]")
+        for case let url as URL in files where url.pathExtension == "swift" {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            let hits = hangul.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
+            XCTAssertEqual(hits, 0, "\(url.lastPathComponent) contains Hangul strings")
+        }
+    }
+}

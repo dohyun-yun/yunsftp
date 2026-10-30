@@ -299,7 +299,7 @@ public actor SFTPService {
 
         if !FileManager.default.fileExists(atPath: destPath) && !FileManager.default.fileExists(atPath: localDestURL.path) {
             throw NSError(domain: "SFTPService", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "파일 다운로드 실패: 대상 파일이 로컬에 저장되지 않았습니다 (\(fileName))."
+                NSLocalizedDescriptionKey: "Download failed: \(fileName) was not written to the local destination."
             ])
         }
         return localDestURL
@@ -749,31 +749,31 @@ public actor SFTPService {
 
         // 1. Connection-level errors
         if lower.contains("connection reset") {
-            return "서버에서 연결을 종료했습니다 (Connection reset). 비밀번호 입력 여부 및 SFTP 포트/방화벽 설정을 확인해주세요."
+            return "The server closed the connection (connection reset). Check the credentials, SFTP port and firewall settings."
         } else if lower.contains("connection refused") {
-            return "서버에서 연결이 거부되었습니다 (Connection refused). SSH/SFTP 서비스 상태와 포트 번호를 확인해주세요."
+            return "Connection refused. Check that the SSH/SFTP service is running and the port number is correct."
         } else if lower.contains("timed out") || lower.contains("timeout") {
-            return "연결 시간 초과 (Connection timed out). 서버 주소 및 네트워크 상태를 확인해주세요."
+            return "Connection timed out. Check the server address and your network connection."
         } else if lower.contains("host is down") || lower.contains("no route to host") {
-            return "서버 호스트에 접근할 수 없습니다 (No route to host)."
+            return "Host unreachable (no route to host)."
         }
 
         // 2. Authentication failure (strictly when SSH/SFTP rejects login credentials)
         if isAuthenticationFailureText(rawError) {
-            return "인증 실패: 사용자명 또는 비밀번호가 올바르지 않습니다 (Permission denied)."
+            return "Authentication failed: the username or password is incorrect (permission denied)."
         }
 
         // 3. File or Directory permission denial (e.g. ls, cd, get, put failed due to filesystem permissions)
         if lower.contains("permission denied") {
-            return "접근 권한이 없습니다 (Permission denied). 대상 폴더 또는 파일의 읽기/쓰기 권한을 확인해주세요."
+            return "Permission denied. Check the read/write permissions of the target file or folder."
         }
 
         // 4. File or Directory not found
         if lower.contains("no such file or directory") || lower.contains("couldn't stat") || lower.contains("not found") {
-            return "경로를 찾을 수 없습니다 (No such file or directory). 폴더가 존재하지 않거나 이름이 변경되었습니다."
+            return "Path not found (no such file or directory). The folder may have been moved or renamed."
         }
 
-        return rawError.isEmpty ? "SSH/SFTP 명령 실행 실패 (코드 \(exitCode))" : rawError
+        return rawError.isEmpty ? "SSH/SFTP command failed (exit code \(exitCode))" : rawError
     }
 
     static func extractLsColumns(from line: String) -> (tokens: [Substring], fileName: String)? {

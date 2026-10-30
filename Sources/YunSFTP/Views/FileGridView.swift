@@ -131,7 +131,7 @@ public struct FileGridView: View {
                                         _ = try await SFTPService.shared.duplicate(remotePath: remotePath, isDirectory: item.isDirectory, connection: conn, password: pwd)
                                         await MainActor.run { pane.reload() }
                                     } catch {
-                                        await MainActor.run { pane.errorMessage = "복제 실패: \(error.localizedDescription)" }
+                                        await MainActor.run { pane.errorMessage = "Duplicate failed: \(error.localizedDescription)" }
                                     }
                                 }
                             } else {

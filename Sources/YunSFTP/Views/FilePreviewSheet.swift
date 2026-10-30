@@ -168,7 +168,7 @@ public struct FilePreviewSheet: View {
                     }
                 } catch {
                     await MainActor.run {
-                        self.errorMessage = "미리보기 다운로드 실패: \(error.localizedDescription)"
+                        self.errorMessage = "Preview download failed: \(error.localizedDescription)"
                         self.isLoading = false
                     }
                 }
@@ -231,7 +231,7 @@ public struct FilePreviewSheet: View {
                     }
                 } catch {
                     await MainActor.run {
-                        errorMessage = "원격 저장 실패: \(error.localizedDescription)"
+                        errorMessage = "Remote save failed: \(error.localizedDescription)"
                         isSaving = false
                     }
                 }
@@ -242,7 +242,7 @@ public struct FilePreviewSheet: View {
                 hasChanges = false
                 pane?.reload()
             } catch {
-                errorMessage = "저장 실패: \(error.localizedDescription)"
+                errorMessage = "Save failed: \(error.localizedDescription)"
             }
             isSaving = false
         }

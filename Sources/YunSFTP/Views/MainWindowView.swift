@@ -350,7 +350,7 @@ public struct MainWindowView: View {
                     }
                 } catch {
                     await MainActor.run {
-                        targetPane.errorMessage = "폴더 생성 실패: \(error.localizedDescription)"
+                        targetPane.errorMessage = "Create folder failed: \(error.localizedDescription)"
                     }
                 }
             }
@@ -363,7 +363,7 @@ public struct MainWindowView: View {
                     }
                 } catch {
                     await MainActor.run {
-                        targetPane.errorMessage = "폴더 생성 실패: \(error.localizedDescription)"
+                        targetPane.errorMessage = "Create folder failed: \(error.localizedDescription)"
                     }
                 }
             }
@@ -388,7 +388,7 @@ public struct MainWindowView: View {
                     }
                 } catch {
                     await MainActor.run {
-                        targetPane.errorMessage = "이름 변경 실패: \(error.localizedDescription)"
+                        targetPane.errorMessage = "Rename failed: \(error.localizedDescription)"
                     }
                 }
             }
@@ -403,7 +403,7 @@ public struct MainWindowView: View {
                     }
                 } catch {
                     await MainActor.run {
-                        targetPane.errorMessage = "이름 변경 실패: \(error.localizedDescription)"
+                        targetPane.errorMessage = "Rename failed: \(error.localizedDescription)"
                     }
                 }
             }
@@ -425,7 +425,7 @@ public struct MainWindowView: View {
                         _ = try await SFTPService.shared.duplicate(remotePath: remotePath, isDirectory: item.isDirectory, connection: conn, password: pwd)
                     } catch {
                         await MainActor.run {
-                            targetPane.errorMessage = "복제 실패: \(error.localizedDescription)"
+                            targetPane.errorMessage = "Duplicate failed: \(error.localizedDescription)"
                         }
                     }
                 }
@@ -440,7 +440,7 @@ public struct MainWindowView: View {
                         _ = try await FileSystemService.shared.duplicate(url: item.url)
                     } catch {
                         await MainActor.run {
-                            targetPane.errorMessage = "복제 실패: \(error.localizedDescription)"
+                            targetPane.errorMessage = "Duplicate failed: \(error.localizedDescription)"
                         }
                     }
                 }
@@ -463,7 +463,7 @@ public struct MainWindowView: View {
                     await MainActor.run { targetPane.reload() }
                 } catch {
                     await MainActor.run {
-                        targetPane.errorMessage = "권한 변경 실패: \(error.localizedDescription)"
+                        targetPane.errorMessage = "Permission change failed: \(error.localizedDescription)"
                     }
                 }
             }
@@ -475,7 +475,7 @@ public struct MainWindowView: View {
                         await MainActor.run { targetPane.reload() }
                     } catch {
                         await MainActor.run {
-                            targetPane.errorMessage = "권한 변경 실패: \(error.localizedDescription)"
+                            targetPane.errorMessage = "Permission change failed: \(error.localizedDescription)"
                         }
                     }
                 }
@@ -896,7 +896,7 @@ public struct MainWindowView: View {
                     } catch {
                         hadError = true
                         await MainActor.run {
-                            targetPane.errorMessage = "삭제 실패 (\(item.name)): \(error.localizedDescription)"
+                            targetPane.errorMessage = "Delete failed (\(item.name)): \(error.localizedDescription)"
                             transferManager.markFailed(id: taskId, error: error.localizedDescription)
                         }
                     }
@@ -924,7 +924,7 @@ public struct MainWindowView: View {
                 }
             } catch {
                 await MainActor.run {
-                    targetPane.errorMessage = "삭제 실패: \(error.localizedDescription)"
+                    targetPane.errorMessage = "Delete failed: \(error.localizedDescription)"
                     targetPane.reload(preserveError: true)
                 }
             }

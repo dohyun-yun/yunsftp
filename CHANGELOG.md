@@ -28,6 +28,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Removed
 - Ad-hoc test scripts and leftovers from the pre-rename project.
+- Fallback to the pre-1.0 (unreleased) Keychain and UserDefaults namespaces. Only builds that predate the public 1.0.0 release were affected.
 
 ## [1.0.0] - 2026-10-19
 - Initial public release.

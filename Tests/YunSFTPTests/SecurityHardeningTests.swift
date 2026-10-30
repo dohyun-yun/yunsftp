@@ -176,3 +176,13 @@ extension SecurityHardeningTests {
         XCTAssertTrue(msg.contains("Allow legacy SSH algorithms"))
     }
 }
+
+extension SecurityHardeningTests {
+    func testTerminalCommandHonoursLegacyToggle() {
+        var conn = RemoteConnection(name: "old", host: "nas.local", port: 22, username: "u")
+        conn.allowLegacyAlgorithms = true
+        let cmd = ConnectionManager.sshCommand(for: conn)
+        XCTAssertTrue(cmd.contains("-o 'KexAlgorithms=+diffie-hellman-group14-sha1"))
+        XCTAssertTrue(cmd.hasSuffix("-- 'u@nas.local'"))
+    }
+}

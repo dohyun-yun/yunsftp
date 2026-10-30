@@ -6,7 +6,7 @@ final class TransferCancellationTests: XCTestCase {
     func testTerminateAllStopsRunningChildProcess() async throws {
         let start = Date()
         let task = Task {
-            try await SFTPService.shared.runProcess(executable: "/bin/sleep", arguments: ["30"], password: nil)
+            try await SFTPService.shared.runProcess(executable: "/bin/sleep", arguments: ["30"], password: nil, isTransfer: true)
         }
         try await Task.sleep(nanoseconds: 400_000_000)
         XCTAssertGreaterThanOrEqual(ProcessRegistry.shared.terminateAll(), 1)
@@ -26,7 +26,7 @@ final class TransferCancellationTests: XCTestCase {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/sleep")
         p.arguments = ["30"]
-        registry.register(p)
+        registry.register(p, isTransfer: true)
         try p.run()
         XCTAssertEqual(registry.terminateAll(), 1)
         p.waitUntilExit()
@@ -64,6 +64,32 @@ final class TransferCancellationTests: XCTestCase {
         tm.markCompleted(id: id)
         tm.cancelTransfer(id: id)
         XCTAssertFalse(tm.consumeCancelRequest(since: .distantPast))
+    }
+
+    func testTerminateAllSkipsNonTransferAndExitedProcesses() throws {
+        let registry = ProcessRegistry()
+        let listing = Process()
+        listing.executableURL = URL(fileURLWithPath: "/bin/sleep"); listing.arguments = ["30"]
+        registry.register(listing, isTransfer: false)
+        try listing.run()
+        defer { listing.terminate() }
+
+        let done = Process()
+        done.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        registry.register(done, isTransfer: true)
+        try done.run(); done.waitUntilExit()
+
+        XCTAssertEqual(registry.terminateAll(), 0, "listings and already-exited children are never signalled")
+        XCTAssertFalse(registry.consumeTerminated(done), "a finished transfer must not be reported as cancelled")
+        XCTAssertTrue(listing.isRunning)
+    }
+
+    @MainActor
+    func testCancellingActiveButStillPreparingDownloadStopsTheBatch() {
+        let tm = TransferManager()
+        let id = tm.addTransfer(fileName: "big.iso", direction: .download, totalBytes: 100) // stays .queued until bytes land
+        tm.cancelTransfer(id: id)
+        XCTAssertTrue(tm.consumeCancelRequest(since: .distantPast))
     }
 
     @MainActor

@@ -86,8 +86,9 @@ public class TransferManager: ObservableObject {
 
     private func requestCancel() {
         cancelRequestedAt = Date()
-        // ponytail: transfers run one process at a time, so "all children" is the current transfer;
-        // a listing racing with the cancel is also killed. Tag processes per transfer if that bites.
+        // ponytail: kills every running *transfer* child (listings/deletes are untouched). Batches
+        // run one transfer at a time, so this is the cancelled one unless two batches overlap;
+        // key the registry by batch token if that bites.
         ProcessRegistry.shared.terminateAll()
     }
 
@@ -165,8 +166,11 @@ public class TransferManager: ObservableObject {
 
     public func cancelTransfer(id: UUID) {
         if let idx = transfers.firstIndex(where: { $0.id == id }) {
-            // Only an in-progress transfer owns a process; a queued one is just dropped.
-            if transfers[idx].state == .inProgress {
+            // The active item owns the process. Downloads stay "queued" until the first bytes land,
+            // so a queued item with nothing in progress is the active one too.
+            let isActive = transfers[idx].state == .inProgress
+                || (transfers[idx].state == .queued && !transfers.contains { $0.state == .inProgress })
+            if isActive {
                 requestCancel()
             }
             transfers[idx].state = .cancelled

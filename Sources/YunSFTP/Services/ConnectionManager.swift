@@ -146,6 +146,9 @@ public class ConnectionManager: ObservableObject {
         if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
             parts += ["-i", q((connection.keyFilePath as NSString).expandingTildeInPath)]
         }
+        if connection.allowLegacyAlgorithms {
+            parts += SFTPService.legacySSHOptions.map { $0 == "-o" ? $0 : q($0) }
+        }
         let target = connection.username.isEmpty ? connection.host : "\(connection.username)@\(connection.host)"
         parts += ["--", q(target)]
         return parts.joined(separator: " ")

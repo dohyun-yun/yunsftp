@@ -357,7 +357,9 @@ private struct ConnectionDetailEditorView: View {
                         .font(.system(size: 11, weight: .medium))
                         .frame(width: 80, alignment: .trailing)
                     Picker("", selection: $connection.connectionProtocol) {
-                        ForEach(ConnectionProtocol.implemented) { proto in
+                        ForEach(ConnectionProtocol.implemented.contains(connection.connectionProtocol)
+                                ? ConnectionProtocol.implemented
+                                : ConnectionProtocol.implemented + [connection.connectionProtocol]) { proto in
                             Text(proto.rawValue).tag(proto)
                         }
                     }

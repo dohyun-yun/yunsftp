@@ -72,3 +72,15 @@ extension FileSystemServiceTests {
         XCTAssertTrue(FileManager.default.fileExists(atPath: planned.path))
     }
 }
+
+extension FileSystemServiceTests {
+    func testPlannedDestinationDetectsCaseInsensitiveCollisions() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try "x".write(to: dir.appendingPathComponent("Report.pdf"), atomically: true, encoding: .utf8)
+        guard FileManager.default.fileExists(atPath: dir.appendingPathComponent("REPORT.PDF").path) else {
+            throw XCTSkip("volume is case-sensitive")
+        }
+        XCTAssertEqual(FileSystemService.plannedDestinationURL(fileName: "report.pdf", in: dir).lastPathComponent, "report 2.pdf")
+    }
+}

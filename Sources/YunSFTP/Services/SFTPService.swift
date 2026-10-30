@@ -58,14 +58,15 @@ public struct RemoteFileItem: Identifiable, Hashable, Sendable {
 public final class ProcessRegistry: @unchecked Sendable {
     public static let shared = ProcessRegistry()
     private let lock = NSLock()
-    private var processes: [ObjectIdentifier: Process] = [:]
+    private var processes: [ObjectIdentifier: (process: Process, isTransfer: Bool)] = [:]
     /// Processes we signalled. sftp/scp handle SIGTERM themselves and exit "normally", so the
     /// exit status alone cannot tell a cancel from a failure.
     private var terminated: Set<ObjectIdentifier> = []
 
     // Keyed by object identity so registering before run() is safe even if the child exits
-    // (and the termination handler fires) immediately.
-    func register(_ p: Process) { lock.lock(); processes[ObjectIdentifier(p)] = p; lock.unlock() }
+    // (and the termination handler fires) immediately. `isTransfer` marks get/put/scp children;
+    // listings, renames and deletes are never killed by a transfer cancel.
+    func register(_ p: Process, isTransfer: Bool) { lock.lock(); processes[ObjectIdentifier(p)] = (p, isTransfer); lock.unlock() }
     func unregister(_ p: Process) { lock.lock(); processes.removeValue(forKey: ObjectIdentifier(p)); lock.unlock() }
 
     /// True once per process if `terminateAll()` signalled it.
@@ -74,14 +75,14 @@ public final class ProcessRegistry: @unchecked Sendable {
         return terminated.remove(ObjectIdentifier(p)) != nil
     }
 
-    /// Sends SIGTERM to every running child. Returns how many were signalled.
+    /// Sends SIGTERM to every running transfer child. Returns how many were signalled.
     @discardableResult
     public func terminateAll() -> Int {
         lock.lock()
-        let running = Array(processes.values)
+        let running = processes.values.filter { $0.isTransfer && $0.process.isRunning }.map { $0.process }
         running.forEach { terminated.insert(ObjectIdentifier($0)) }
         lock.unlock()
-        running.forEach { if $0.isRunning { $0.terminate() } }
+        running.forEach { $0.terminate() }
         return running.count
     }
 }
@@ -347,7 +348,7 @@ public actor SFTPService {
         args.append(contentsOf: ["-r", remoteSpec, localDestURL.path])
 
         do {
-            _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd)
+            _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd, isTransfer: true)
         } catch {
             discardPartial()
             throw error
@@ -405,17 +406,18 @@ public actor SFTPService {
                 let remoteSpec = "\(userPart)\(connection.host):\(Self.posixShellEscape(remoteDest))"
                 args.append(contentsOf: ["-r", localURL.path, remoteSpec])
 
-                _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd)
+                _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd, isTransfer: true)
             }
         }
     }
 
-    /// True when `remotePath` exists (file or directory). Auth failures and cancellation propagate.
+    /// True when `remotePath` exists (file or directory). Only an explicit "not found" means
+    /// absent; auth failures, timeouts, permission errors and cancellation propagate.
     func remoteExists(_ remotePath: String, connection: RemoteConnection, password: String?) async throws -> Bool {
         do {
             _ = try await executeSFTPBatch(commands: ["ls -la \(Self.sftpQuote(remotePath))"], connection: connection, password: password)
             return true
-        } catch where !Self.isAuthenticationFailure(error) && !Self.isCancellation(error) {
+        } catch where Self.isNotFound(error) {
             return false
         }
     }
@@ -692,23 +694,28 @@ public actor SFTPService {
         }
 
         let inputString = commands.joined(separator: "\n") + "\nexit\n"
-        return try await runProcess(executable: "/usr/bin/sftp", arguments: args, inputData: inputString.data(using: .utf8), password: effectivePwd)
+        let isTransfer = commands.contains { $0.hasPrefix("get ") || $0.hasPrefix("put ") }
+        return try await runProcess(executable: "/usr/bin/sftp", arguments: args, inputData: inputString.data(using: .utf8), password: effectivePwd, isTransfer: isTransfer)
     }
 
-    /// Creates the SSH_ASKPASS helper in the per-user temp dir. The file is created in one
-    /// step with mode 0700 (no window where it is world-readable) and removed after the
-    /// process exits. The password is base64-wrapped only to survive shell quoting.
+    /// Creates the SSH_ASKPASS helper in the per-user temp dir with open(O_CREAT|O_EXCL, 0700),
+    /// so the file never exists with a wider mode, and removes it after the process exits.
+    /// The password is base64-wrapped only to survive shell quoting.
     static func writeAskpassScript(password: String) throws -> URL {
         let base64Pwd = Data(password.utf8).base64EncodedString()
         let script = "#!/bin/sh\necho \"\(base64Pwd)\" | /usr/bin/base64 -d\n"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("askpass_\(UUID().uuidString).sh")
-        guard FileManager.default.createFile(atPath: url.path, contents: Data(script.utf8), attributes: [.posixPermissions: 0o700]) else {
+        let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL, 0o700)
+        guard fd >= 0 else {
             throw NSError(domain: "SFTPService", code: 3, userInfo: [NSLocalizedDescriptionKey: "Could not create the password helper"])
         }
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        try handle.write(contentsOf: Data(script.utf8))
+        try handle.close()
         return url
     }
 
-    func runProcess(executable: String, arguments: [String], inputData: Data? = nil, password: String?) async throws -> String {
+    func runProcess(executable: String, arguments: [String], inputData: Data? = nil, password: String?, isTransfer: Bool = false) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
@@ -764,7 +771,7 @@ public actor SFTPService {
                     }
                 }
                 do {
-                    ProcessRegistry.shared.register(process)
+                    ProcessRegistry.shared.register(process, isTransfer: isTransfer)
                     try process.run()
                     if let input = inputData {
                         stdinPipe.fileHandleForWriting.write(input)
@@ -788,12 +795,20 @@ public actor SFTPService {
                 try? FileManager.default.removeItem(at: tmp)
             }
 
-            let output = String(data: outData, encoding: .utf8) ?? ""
-            let errorMsg = String(data: errData, encoding: .utf8) ?? ""
+            // sftp prints remote names in error messages as a mix of raw bytes and octal escapes,
+            // which is often not valid UTF-8. Decode lossily instead of dropping the whole message.
+            let output = String(decoding: outData, as: UTF8.self)
+            let errorMsg = String(decoding: errData, as: UTF8.self)
 
-            if ProcessRegistry.shared.consumeTerminated(process) || process.terminationReason == .uncaughtSignal {
+            if ProcessRegistry.shared.consumeTerminated(process) {
                 throw NSError(domain: "SFTPService", code: Self.cancellationCode, userInfo: [
                     NSLocalizedDescriptionKey: "Transfer cancelled."
+                ])
+            }
+            if process.terminationReason == .uncaughtSignal {
+                let detail = String(decoding: errData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                throw NSError(domain: "SFTPService", code: Int(process.terminationStatus), userInfo: [
+                    NSLocalizedDescriptionKey: "\((executable as NSString).lastPathComponent) was terminated by signal \(process.terminationStatus)." + (detail.isEmpty ? "" : " \(detail)")
                 ])
             }
 
@@ -802,7 +817,9 @@ public actor SFTPService {
                     .filter { !$0.contains("WARNING") && !$0.isEmpty }
                     .joined(separator: " ")
                 let friendly = Self.translateErrorMessage(cleanErr, exitCode: Int(process.terminationStatus))
-                let code = Self.isAuthenticationFailureText(cleanErr) ? Self.authenticationFailureCode : Int(process.terminationStatus)
+                let code = Self.isAuthenticationFailureText(cleanErr) ? Self.authenticationFailureCode
+                    : Self.isNotFoundText(cleanErr) ? Self.notFoundCode
+                    : Int(process.terminationStatus)
                 throw NSError(domain: "SFTPService", code: code, userInfo: [
                     NSLocalizedDescriptionKey: friendly
                 ])
@@ -828,6 +845,19 @@ public actor SFTPService {
     static func isCancellation(_ error: Error) -> Bool {
         let ns = error as NSError
         return ns.domain == "SFTPService" && ns.code == cancellationCode
+    }
+
+    /// Error code used when ssh/sftp reported that the remote path does not exist.
+    static let notFoundCode = -1003
+
+    static func isNotFound(_ error: Error) -> Bool {
+        let ns = error as NSError
+        return ns.domain == "SFTPService" && ns.code == notFoundCode
+    }
+
+    static func isNotFoundText(_ rawError: String) -> Bool {
+        let lower = rawError.lowercased()
+        return lower.contains("no such file or directory") || lower.contains("couldn't stat") || lower.contains("not found")
     }
 
     static func isAuthenticationFailure(_ error: Error) -> Bool {
@@ -879,7 +909,7 @@ public actor SFTPService {
         }
 
         // 4. File or Directory not found
-        if lower.contains("no such file or directory") || lower.contains("couldn't stat") || lower.contains("not found") {
+        if isNotFoundText(rawError) {
             return "Path not found (no such file or directory). The folder may have been moved or renamed."
         }
 

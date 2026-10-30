@@ -215,10 +215,19 @@ public actor FileSystemService {
     /// Where a "keep both" copy/download of `fileName` into `directory` will land. Shared by the
     /// local copy path, SFTP downloads and the progress monitors so they all agree on the name.
     public static func plannedDestinationURL(fileName: String, in directory: URL) -> URL {
-        let existing = Set(((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
-            .map { $0.precomposedStringWithCanonicalMapping })
-        let name = SFTPService.uniqueName(fileName.precomposedStringWithCanonicalMapping, existing: existing)
-        return directory.appendingPathComponent(name)
+        // Probe through the file system so case-insensitive / normalization-insensitive volumes
+        // (default APFS) report collisions the way they will actually happen.
+        var taken = Set<String>()
+        let base = fileName.precomposedStringWithCanonicalMapping
+        while true {
+            let candidate = SFTPService.uniqueName(base, existing: taken)
+            let url = directory.appendingPathComponent(candidate)
+            if FileManager.default.fileExists(atPath: url.path) {
+                taken.insert(candidate)
+            } else {
+                return url
+            }
+        }
     }
 
     private func uniqueDestinationURL(for url: URL) -> URL {

@@ -49,3 +49,32 @@ final class SFTPConflictHandlingTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: second.path))
     }
 }
+
+extension SFTPConflictHandlingTests {
+    func testRemoteExistsDistinguishesMissingFromPresent() async throws {
+        guard FileManager.default.fileExists(atPath: "/usr/libexec/sftp-server") else { throw XCTSkip("no sftp-server") }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("yunsftp_exists_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try "x".write(to: dir.appendingPathComponent("here.txt"), atomically: true, encoding: .utf8)
+        let conn = RemoteConnection(name: "Local", host: "local-sftp-server", port: 22, username: NSUserName(), remotePath: dir.path, authType: .sshKey)
+
+        let present = try await SFTPService.shared.remoteExists(dir.appendingPathComponent("here.txt").path, connection: conn, password: nil)
+        let missing = try await SFTPService.shared.remoteExists(dir.appendingPathComponent("gone.txt").path, connection: conn, password: nil)
+        XCTAssertTrue(present)
+        XCTAssertFalse(missing)
+    }
+}
+
+extension SFTPConflictHandlingTests {
+    func testRemoteExistsHandlesNonUTF8ErrorOutputForKoreanNames() async throws {
+        guard FileManager.default.fileExists(atPath: "/usr/libexec/sftp-server") else { throw XCTSkip("no sftp-server") }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("yunsftp_utf8_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let conn = RemoteConnection(name: "Local", host: "local-sftp-server", port: 22, username: NSUserName(), remotePath: dir.path, authType: .sshKey)
+        // sftp reports this missing path with mangled bytes; it must still read as "absent".
+        let missing = try await SFTPService.shared.remoteExists(dir.appendingPathComponent("업로드  테스트   파일.txt").path, connection: conn, password: nil)
+        XCTAssertFalse(missing)
+    }
+}

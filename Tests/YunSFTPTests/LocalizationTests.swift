@@ -28,14 +28,23 @@ final class LocalizationTests: XCTestCase {
         XCTAssertTrue(missing.isEmpty, "missing Korean for: \(Set(missing).sorted())")
     }
 
-    func testKoreanTableShipsInTheModuleBundle() throws {
-        let contents = (try? FileManager.default.subpathsOfDirectory(atPath: Bundle.module.bundlePath)) ?? []
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "Localizable", withExtension: "strings", subdirectory: nil, localization: "ko"),
-                                "no ko table in \(Bundle.module.bundlePath): \(contents)")
+    func testKoreanTableIsFoundByTheAppsOwnLookup() throws {
+        // The app must not rely on the toolchain-generated Bundle.module (its search paths vary).
+        XCTAssertTrue(L10nBundle.isResourceBundleLoaded, "resource bundle not found from \(L10nBundle.bundle.bundlePath)")
+        let bundle = L10nBundle.bundle
+        let url = try XCTUnwrap(bundle.url(forResource: "Localizable", withExtension: "strings", subdirectory: nil, localization: "ko"))
         let table = try XCTUnwrap(NSDictionary(contentsOf: url) as? [String: String])
         XCTAssertEqual(table["Connect"], "연결")
         XCTAssertEqual(table["Keep Both"], "둘 다 유지")
-        XCTAssertTrue(Bundle.module.localizations.contains("ko"))
+        XCTAssertTrue(bundle.localizations.contains("ko"))
+    }
+
+    func testNoCodeUsesTheGeneratedModuleAccessor() throws {
+        let files = try XCTUnwrap(FileManager.default.enumerator(at: root.appendingPathComponent("Sources"), includingPropertiesForKeys: nil))
+        for case let url as URL in files where url.pathExtension == "swift" {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            XCTAssertFalse(text.contains("Bundle.module"), "\(url.lastPathComponent) uses Bundle.module, which traps when the bundle is not where that toolchain expects")
+        }
     }
 
     func testFallbackIsTheEnglishKey() {

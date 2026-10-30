@@ -22,5 +22,5 @@ jobs:
         # Demo mode opens the main window, renders a screenshot and exits 0; a launch crash
         # (missing resource bundle, bad scene order, …) fails here instead of on users' Macs.
         run: |
-          timeout 60 build/yunsftp.app/Contents/MacOS/yunsftp --demo-screenshot "$RUNNER_TEMP/smoke.png" --appearance light -AppleLocale en_US -AppleLanguages "(en)"
+          perl -e 'alarm shift; exec @ARGV' 60 build/yunsftp.app/Contents/MacOS/yunsftp --demo-screenshot "$RUNNER_TEMP/smoke.png" --appearance light -AppleLocale en_US -AppleLanguages "(en)"
           test -s "$RUNNER_TEMP/smoke.png"

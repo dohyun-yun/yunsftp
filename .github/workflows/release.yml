@@ -50,7 +50,7 @@ jobs:
 
       - name: Smoke-launch the packaged app
         run: |
-          timeout 60 build/yunsftp.app/Contents/MacOS/yunsftp --demo-screenshot "$RUNNER_TEMP/smoke.png" --appearance light -AppleLocale en_US -AppleLanguages "(en)"
+          perl -e 'alarm shift; exec @ARGV' 60 build/yunsftp.app/Contents/MacOS/yunsftp --demo-screenshot "$RUNNER_TEMP/smoke.png" --appearance light -AppleLocale en_US -AppleLanguages "(en)"
           test -s "$RUNNER_TEMP/smoke.png"
 
       - name: Notarize

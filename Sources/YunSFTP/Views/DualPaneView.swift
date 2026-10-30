@@ -16,6 +16,7 @@ public struct DualPaneView: View {
     var onTrashItems: ([FileItem]) -> Void
     var onCompressItems: ([FileItem]) -> Void
     var onExtractArchive: (FileItem) -> Void
+    var onConnect: (() -> Void)? = nil
 
     public var body: some View {
         HSplitView {
@@ -32,7 +33,8 @@ public struct DualPaneView: View {
                 onMoveToOtherPane: onMoveToOtherPane,
                 onTrashItems: onTrashItems,
                 onCompressItems: onCompressItems,
-                onExtractArchive: onExtractArchive
+                onExtractArchive: onExtractArchive,
+                onConnect: onConnect
             )
             .frame(minWidth: 280)
 
@@ -50,7 +52,8 @@ public struct DualPaneView: View {
                     onMoveToOtherPane: onMoveToOtherPane,
                     onTrashItems: onTrashItems,
                     onCompressItems: onCompressItems,
-                    onExtractArchive: onExtractArchive
+                    onExtractArchive: onExtractArchive,
+                    onConnect: onConnect
                 )
                 .frame(minWidth: 280)
             }

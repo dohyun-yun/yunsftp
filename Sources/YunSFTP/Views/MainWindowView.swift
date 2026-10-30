@@ -97,6 +97,7 @@ public struct MainWindowView: View {
                 }
             )
             .navigationSplitViewColumnWidth(min: 160, ideal: 190, max: 260)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 340)
         } detail: {
             VStack(spacing: 0) {
                 // Top Transfer Progress & Status Banner
@@ -140,60 +141,62 @@ public struct MainWindowView: View {
                     },
                     onExtractArchive: { item in
                         extractArchive(item)
+                    },
+                    onConnect: {
+                        connectSheetInitialConn = nil
+                        showConnectSheet = true
                     }
                 )
             }
-            .toolbar {
-                ToolbarItemGroup(placement: .automatic) {
-                    ToolbarView(
-                        isDualPane: $isDualPane,
-                        onToggleDualPane: {
-                            isDualPane.toggle()
-                            if !isDualPane {
-                                activePaneId = leftPane.id
-                            }
-                        },
-                        onConnect: {
-                            connectSheetInitialConn = nil
-                            showConnectSheet = true
-                        },
-                        onCopyToOtherPane: { copySelectedToOtherPane() },
-                        onMoveToOtherPane: { moveSelectedToOtherPane() },
-                        onRefresh: { activePane.reload() },
-                        onNewFolder: {
-                            showNewFolderPrompt = true
-                        },
-                        onDelete: {
-                            trashItems(activePane.effectiveSelectedItems)
-                        },
-                        onChmod: {
-                            if let first = activePane.firstSelectedItem {
-                                chmodItem = first
-                            }
-                        },
-                        onQuickLook: {
-                            if let first = activePane.firstSelectedItem {
-                                previewItem = first
-                            }
-                        },
-                        onBatchRename: {
-                            if !activePane.effectiveSelectedItems.isEmpty {
-                                showBatchRenameSheet = true
-                            }
-                        },
-                        onCompareSync: {
-                            showCompareSyncSheet = true
-                        },
-                        onOpenTerminal: {
-                            TerminalService.openInTerminal(at: activePane.currentURL)
-                        },
-                        onGetInfo: {
-                            if let first = activePane.firstSelectedItem {
-                                infoItem = first
-                            }
+            .toolbar(id: "yunsftp.main") {
+                ToolbarView(
+                    isDualPane: $isDualPane,
+                    onToggleDualPane: {
+                        isDualPane.toggle()
+                        if !isDualPane {
+                            activePaneId = leftPane.id
                         }
-                    )
-                }
+                    },
+                    onConnect: {
+                        connectSheetInitialConn = nil
+                        showConnectSheet = true
+                    },
+                    onCopyToOtherPane: { copySelectedToOtherPane() },
+                    onMoveToOtherPane: { moveSelectedToOtherPane() },
+                    onRefresh: { activePane.reload() },
+                    onNewFolder: {
+                        showNewFolderPrompt = true
+                    },
+                    onDelete: {
+                        trashItems(activePane.effectiveSelectedItems)
+                    },
+                    onChmod: {
+                        if let first = activePane.firstSelectedItem {
+                            chmodItem = first
+                        }
+                    },
+                    onQuickLook: {
+                        if let first = activePane.firstSelectedItem {
+                            previewItem = first
+                        }
+                    },
+                    onBatchRename: {
+                        if !activePane.effectiveSelectedItems.isEmpty {
+                            showBatchRenameSheet = true
+                        }
+                    },
+                    onCompareSync: {
+                        showCompareSyncSheet = true
+                    },
+                    onOpenTerminal: {
+                        TerminalService.openInTerminal(at: activePane.currentURL)
+                    },
+                    onGetInfo: {
+                        if let first = activePane.firstSelectedItem {
+                            infoItem = first
+                        }
+                    }
+                )
             }
         }
         .frame(minWidth: 800, minHeight: 520)
@@ -1018,7 +1021,7 @@ public struct RenameSheet: View {
                     Text("Rename Item")
                         .font(.headline)
                     Text("Original: \(initialName)")
-                        .font(.system(size: 11))
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
                         .textSelection(.enabled)
@@ -1028,7 +1031,7 @@ public struct RenameSheet: View {
 
             HStack(spacing: 8) {
                 TextField("New Name", text: $newName)
-                    .font(.system(size: 13))
+                    .font(.body)
                     .textFieldStyle(.roundedBorder)
                     .focused($isNameFocused)
                     .onSubmit {
@@ -1039,7 +1042,7 @@ public struct RenameSheet: View {
                     newName = initialName
                 }) {
                     Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 12))
+                        .font(.callout)
                 }
                 .buttonStyle(.borderless)
                 .help("Restore original filename")
@@ -1106,7 +1109,7 @@ public struct NewFolderSheet: View {
             }
 
             TextField("Folder Name", text: $folderName)
-                .font(.system(size: 13))
+                .font(.body)
                 .textFieldStyle(.roundedBorder)
                 .focused($isFocused)
                 .onSubmit {

@@ -195,14 +195,14 @@ public struct FileListView: View {
                                 ProgressView()
                                     .scaleEffect(1.2)
                                 Text("Loading...")
-                                    .font(.system(size: 14))
+                                    .font(.title3)
                                     .foregroundColor(.secondary)
                             } else if let error = pane.errorMessage {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .font(.system(size: 36))
                                     .foregroundColor(.orange)
                                 Text(error)
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(.body.weight(.medium))
                                     .foregroundColor(.primary)
                                     .multilineTextAlignment(.center)
                                     .padding(.horizontal, 24)
@@ -222,8 +222,11 @@ public struct FileListView: View {
                                     .font(.system(size: 40))
                                     .foregroundColor(.secondary.opacity(0.4))
                                 Text("Folder is Empty")
-                                    .font(.system(size: 14))
+                                    .font(.title3)
                                     .foregroundColor(.secondary)
+                                Text(pane.isRemote ? "Drop files here to upload, or press ⌘⇧N for a new folder." : "Drop files here, or press ⌘⇧N for a new folder.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary.opacity(0.8))
                             }
                             Spacer()
                         }
@@ -325,13 +328,13 @@ public struct FileListView: View {
             HStack(spacing: 4) {
                 if alignment == .trailing { Spacer(minLength: 0) }
                 Text(title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if let field = field, pane.sortField == field {
                     Image(systemName: pane.sortAscending ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9))
+                        .font(.caption2)
                         .foregroundColor(.accentColor)
                 }
                 if alignment != .trailing { Spacer(minLength: 0) }
@@ -544,7 +547,7 @@ public struct FileRowView: View {
 
                 if item.isSymlink {
                     Image(systemName: "arrowshape.turn.up.right.fill")
-                        .font(.system(size: 9))
+                        .font(.caption2)
                         .foregroundColor(.blue)
                 }
                 Spacer(minLength: 0)

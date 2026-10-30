@@ -12,15 +12,15 @@ public struct TransferStatusBarView: View {
                 case .failed(let err):
                     HStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 15))
+                            .font(.title3)
                             .foregroundColor(.red)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Transfer Failed: \(current.fileName)")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.subheadline.weight(.bold))
                                 .foregroundColor(.red)
                             Text(err)
-                                .font(.system(size: 10))
+                                .font(.caption)
                                 .foregroundColor(.primary)
                                 .lineLimit(2)
                         }
@@ -40,16 +40,16 @@ public struct TransferStatusBarView: View {
                 case .completed:
                     HStack(spacing: 10) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 15))
+                            .font(.title3)
                             .foregroundColor(.green)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Transfer Complete: \(current.fileName)")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.subheadline.weight(.bold))
                                 .foregroundColor(.green)
                             let totalStr = current.totalBytes > 0 ? ByteCountFormatter.string(fromByteCount: current.totalBytes, countStyle: .file) : ""
                             Text(totalStr.isEmpty ? "Finished successfully" : "\(totalStr) transferred")
-                                .font(.system(size: 10))
+                                .font(.caption)
                                 .foregroundColor(.secondary)
                         }
 
@@ -62,7 +62,7 @@ public struct TransferStatusBarView: View {
 
                         Button(action: { transferManager.clearCompleted() }) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 13))
+                                .font(.body)
                                 .foregroundColor(.secondary)
                         }
                         .buttonStyle(.plain)
@@ -74,11 +74,11 @@ public struct TransferStatusBarView: View {
                 case .cancelled:
                     HStack(spacing: 10) {
                         Image(systemName: "nosign")
-                            .font(.system(size: 14))
+                            .font(.title3)
                             .foregroundColor(.orange)
 
                         Text("Cancelled: \(current.fileName)")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundColor(.orange)
 
                         Spacer()
@@ -96,24 +96,24 @@ public struct TransferStatusBarView: View {
                 case .inProgress, .queued:
                     HStack(spacing: 10) {
                         Image(systemName: current.direction.systemImage)
-                            .font(.system(size: 15))
+                            .font(.title3)
                             .foregroundColor(.accentColor)
 
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
                                 Text(current.direction.rawValue)
-                                    .font(.system(size: 11, weight: .bold))
+                                    .font(.subheadline.weight(.bold))
                                     .foregroundColor(.accentColor)
 
                                 Text(current.fileName)
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(.subheadline.weight(.semibold))
                                     .lineLimit(1)
                                     .truncationMode(.middle)
 
                                 if transferManager.transfers.count > 1 {
                                     let activeCount = transferManager.transfers.filter { $0.state == .inProgress || $0.state == .queued }.count
                                     Text("(\(activeCount) items in queue)")
-                                        .font(.system(size: 10))
+                                        .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
                             }
@@ -127,14 +127,14 @@ public struct TransferStatusBarView: View {
                                     let doneStr = ByteCountFormatter.string(fromByteCount: current.bytesTransferred, countStyle: .file)
                                     let totalStr = ByteCountFormatter.string(fromByteCount: current.totalBytes, countStyle: .file)
                                     Text("\(doneStr) / \(totalStr) (\(Int(current.progress * 100))%)")
-                                        .font(.system(size: 10, design: .monospaced))
+                                        .font(.caption.monospaced())
                                         .foregroundColor(.secondary)
                                 } else {
                                     ProgressView()
                                         .scaleEffect(0.6)
                                         .frame(width: 14, height: 14)
                                     Text(current.statusMessage)
-                                        .font(.system(size: 10))
+                                        .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
                             }
@@ -146,7 +146,7 @@ public struct TransferStatusBarView: View {
                             transferManager.cancelTransfer(id: current.id)
                         }) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
+                                .font(.title3)
                                 .foregroundColor(.secondary)
                         }
                         .buttonStyle(.plain)

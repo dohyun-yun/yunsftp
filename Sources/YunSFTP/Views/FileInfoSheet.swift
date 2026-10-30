@@ -63,12 +63,12 @@ public struct FileInfoSheet: View {
     private func infoRow(_ label: String, _ value: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text(label + ":")
-                .font(.system(size: 11, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(.secondary)
                 .frame(width: 80, alignment: .trailing)
 
             Text(value)
-                .font(.system(size: 11))
+                .font(.subheadline)
                 .textSelection(.enabled)
                 .lineLimit(3)
 

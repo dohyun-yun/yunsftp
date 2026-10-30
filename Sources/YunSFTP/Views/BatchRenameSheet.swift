@@ -73,18 +73,18 @@ public struct BatchRenameSheet: View {
                         let newName = rule.apply(to: item.name, index: index)
                         HStack(spacing: 10) {
                             Text(item.name)
-                                .font(.system(size: 11))
+                                .font(.subheadline)
                                 .foregroundColor(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .lineLimit(1)
                                 .help(item.name)
 
                             Image(systemName: "arrow.right")
-                                .font(.system(size: 10))
+                                .font(.caption)
                                 .foregroundColor(.accentColor)
 
                             Text(newName)
-                                .font(.system(size: 11, weight: item.name != newName ? .bold : .regular))
+                                .font(.subheadline.weight(item.name != newName ? .bold : .regular))
                                 .foregroundColor(item.name != newName ? .primary : .secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .lineLimit(1)

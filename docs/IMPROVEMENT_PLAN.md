@@ -47,10 +47,10 @@ Legend as above. Order = execution order.
 - [x] 26. Import hosts from `~/.ssh/config` (and Cyberduck bookmarks if present) with a first-run empty state that offers it.
 - [x] 27. List polish: relative dates by default, Perms hidden by default, `Kind` without "Remote" prefix, checkmark only for multi-selection, columns auto-hide in narrow panes.
 - [x] 28. Filter field hidden until `Cmd+F`; `Cmd+Shift+G` go-to-path; pane header shows one connection chip (no duplicate breadcrumb root).
-- [ ] 29. Toolbar: six primary actions + overflow menu, user-customizable, accessibility labels on every icon-only control.
-- [ ] 30. Sidebar: status dot instead of "ONLINE" pill, hover-only edit button, no truncation at default width.
-- [ ] 31. Typography and color: system text styles instead of 9–11pt hardcoded sizes; semantic colors; light-mode pass.
-- [ ] 32. Empty states: first launch, empty folder, connection failure each with a next action.
+- [x] 29. Toolbar: six primary actions + overflow menu, user-customizable, accessibility labels on every icon-only control.
+- [x] 30. Sidebar: status dot instead of "ONLINE" pill, hover-only edit button, no truncation at default width.
+- [x] 31. Typography and color: system text styles instead of 9–11pt hardcoded sizes; semantic colors; light-mode pass.
+- [x] 32. Empty states: first launch, empty folder, connection failure each with a next action.
 
 ## B. Transfers and file operations
 

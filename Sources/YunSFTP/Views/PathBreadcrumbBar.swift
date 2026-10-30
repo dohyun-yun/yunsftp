@@ -12,7 +12,7 @@ public struct PathBreadcrumbBar: View {
             HStack(spacing: 2) {
                 Button(action: { pane.goBack() }) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                 }
                 .disabled(!pane.canGoBack)
                 .buttonStyle(.plain)
@@ -20,7 +20,7 @@ public struct PathBreadcrumbBar: View {
 
                 Button(action: { pane.goForward() }) {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                 }
                 .disabled(!pane.canGoForward)
                 .buttonStyle(.plain)
@@ -28,7 +28,7 @@ public struct PathBreadcrumbBar: View {
 
                 Button(action: { pane.goUp() }) {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                 }
                 .disabled(!pane.canGoUp)
                 .buttonStyle(.plain)
@@ -47,17 +47,17 @@ public struct PathBreadcrumbBar: View {
                         .shadow(color: .green.opacity(0.8), radius: 2)
 
                     Image(systemName: "network")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundColor(.green)
 
                     Text(conn.displayTitle)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(.primary)
                         .lineLimit(1)
 
                     Button(action: { pane.disconnectRemote() }) {
                         Image(systemName: "eject")
-                            .font(.system(size: 9))
+                            .font(.caption2)
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -81,11 +81,11 @@ public struct PathBreadcrumbBar: View {
                         .frame(width: 6, height: 6)
 
                     Image(systemName: "internaldrive")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
 
                     Text("Local")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(.primary)
                         .lineLimit(1)
                 }
@@ -109,7 +109,7 @@ public struct PathBreadcrumbBar: View {
                         applyCustomPath()
                     })
                     .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .focused($isPathFieldFocused)
                     .onExitCommand { isEditingPath = false }
                     .onAppear { isPathFieldFocused = true }
@@ -141,14 +141,14 @@ public struct PathBreadcrumbBar: View {
                                     HStack(spacing: 3) {
                                         if item.isRoot {
                                             Image(systemName: pane.isRemote ? "server.rack" : "internaldrive")
-                                                .font(.system(size: 11))
+                                                .font(.subheadline)
                                                 .foregroundColor(pane.isRemote ? .accentColor : .secondary)
                                         } else if item.isHome {
                                             Image(systemName: "house")
-                                                .font(.system(size: 11))
+                                                .font(.subheadline)
                                         }
                                         Text(item.name)
-                                            .font(.system(size: 12))
+                                            .font(.callout)
                                             .lineLimit(1)
                                     }
                                     .padding(.horizontal, 4)
@@ -160,7 +160,7 @@ public struct PathBreadcrumbBar: View {
 
                                 if item.url != pane.currentURL {
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(.caption2.weight(.bold))
                                         .foregroundColor(.secondary.opacity(0.6))
                                 }
                             }
@@ -197,7 +197,7 @@ public struct PathBreadcrumbBar: View {
                 isEditingPath.toggle()
             }) {
                 Image(systemName: isEditingPath ? "xmark" : "character.cursor.ibeam")
-                    .font(.system(size: 11))
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
@@ -206,7 +206,7 @@ public struct PathBreadcrumbBar: View {
             // Reload button
             Button(action: { pane.reload() }) {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11))
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)

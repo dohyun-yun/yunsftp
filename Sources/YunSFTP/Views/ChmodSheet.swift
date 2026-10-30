@@ -90,7 +90,7 @@ public struct ChmodSheet: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 Text(octalValue)
-                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .font(.title3.monospaced().weight(.bold))
                     .foregroundColor(.primary)
                 Spacer()
             }

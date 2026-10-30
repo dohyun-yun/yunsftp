@@ -33,7 +33,7 @@ public struct FileGridView: View {
                             .shadow(radius: 1)
 
                         Text(item.name)
-                            .font(.system(size: 11))
+                            .font(.subheadline)
                             .lineLimit(2)
                             .multilineTextAlignment(.center)
                             .foregroundColor(isSelected ? .white : .primary)

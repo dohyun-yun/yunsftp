@@ -360,9 +360,21 @@ public actor SFTPService {
         return nil
     }
 
+    /// Where a download for `finalURL` is written before it is moved into place. The sftp child
+    /// writes only inside the app's own temp folder; TCC-protected folders (Downloads, Desktop,
+    /// Documents, external volumes) are touched by the app process alone, which holds the grant.
+    public static func stagedURL(for finalURL: URL) -> URL {
+        let key = finalURL.deletingLastPathComponent().path.unicodeScalars.reduce(UInt64(1469598103934665603)) { ($0 ^ UInt64($1.value)) &* 1099511628211 }
+        return FileManager.default.temporaryDirectory
+            .appendingPathComponent("yunsftpStage", isDirectory: true)
+            .appendingPathComponent(String(key, radix: 16), isDirectory: true)
+            .appendingPathComponent(finalURL.lastPathComponent)
+    }
+
     /// Downloads `remotePath` into `localDirectory`. Unless `overwrite` is set, an existing
-    /// local item with the same name is kept and the download gets a " 2" suffix. A failed or
-    /// cancelled download never leaves a partial file behind (for the non-overwrite case).
+    /// local item with the same name is kept and the download gets a " 2" suffix. The file is
+    /// staged in the temp folder and moved into place on success, so a failed or cancelled
+    /// download never leaves a partial file in the destination.
     public func download(remotePath: String, to localDirectory: URL, connection: RemoteConnection, password: String?, overwrite: Bool = false) async throws -> URL {
         let cleanRemotePath = Self.normalizeRemotePath(remotePath)
         let fileName = (cleanRemotePath as NSString).lastPathComponent
@@ -376,59 +388,82 @@ public actor SFTPService {
             ? localDirectory.appendingPathComponent(fileName)
             : FileSystemService.plannedDestinationURL(fileName: fileName, in: localDirectory)
         let destName = localDestURL.lastPathComponent
-        let discardPartial = { if !overwrite { try? FileManager.default.removeItem(at: localDestURL) } }
+        let stagedURL = Self.stagedURL(for: localDestURL)
+        let stagingDir = stagedURL.deletingLastPathComponent()
+        try? FileManager.default.removeItem(at: stagingDir)
+        try FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: stagingDir) }
 
         let batchAttempts: [[String]] = [
-            // 1. lcd (local dest) + cd (remote parent) + get -R (filename) -> respects chroot shares
-            ["lcd \(Self.sftpQuote(localDirectory.path))", "cd \(Self.sftpQuote(remoteParent))", "get -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(destName))"],
+            // 1. lcd (staging) + cd (remote parent) + get -R (filename) -> respects chroot shares
+            ["lcd \(Self.sftpQuote(stagingDir.path))", "cd \(Self.sftpQuote(remoteParent))", "get -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(destName))"],
             // 2. direct get with the full remote path if the cd failed
-            ["lcd \(Self.sftpQuote(localDirectory.path))", "get -R \(Self.sftpQuote(cleanRemotePath)) \(Self.sftpQuote(destName))"]
+            ["lcd \(Self.sftpQuote(stagingDir.path))", "get -R \(Self.sftpQuote(cleanRemotePath)) \(Self.sftpQuote(destName))"]
         ]
-        for commands in batchAttempts {
+        var staged = false
+        for commands in batchAttempts where !staged {
             do {
                 _ = try await executeSFTPBatch(commands: commands, connection: connection, password: effectivePwd, isTransfer: true)
-                if FileManager.default.fileExists(atPath: localDestURL.path) {
-                    return localDestURL
-                }
+                staged = FileManager.default.fileExists(atPath: stagedURL.path)
             } catch where !Self.isFatal(error) {
-                discardPartial()
-            } catch {
-                discardPartial()
-                throw error
+                try? FileManager.default.removeItem(at: stagedURL)
             }
         }
 
-        // 3. Fallback to scp (quoting remoteSpec for remote shell execution)
-        var args = ["-P", "\(connection.port)"]
-        args.append(contentsOf: Self.sshOptions(for: connection))
-
-        if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
-            let expandedKey = (connection.keyFilePath as NSString).expandingTildeInPath
-            args.append(contentsOf: ["-i", expandedKey])
-        }
-
-        let userPart = connection.username.isEmpty ? "" : "\(connection.username)@"
-        let remoteSpec = "\(userPart)\(connection.host):\(Self.posixShellEscape(cleanRemotePath))"
-        args.append(contentsOf: ["-r", remoteSpec, localDestURL.path])
-
-        do {
+        if !staged {
+            // 3. Fallback to scp (quoting remoteSpec for remote shell execution)
+            var args = ["-P", "\(connection.port)"]
+            args.append(contentsOf: Self.sshOptions(for: connection))
+            if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
+                let expandedKey = (connection.keyFilePath as NSString).expandingTildeInPath
+                args.append(contentsOf: ["-i", expandedKey])
+            }
+            let userPart = connection.username.isEmpty ? "" : "\(connection.username)@"
+            let remoteSpec = "\(userPart)\(connection.host):\(Self.posixShellEscape(cleanRemotePath))"
+            args.append(contentsOf: ["-r", remoteSpec, stagedURL.path])
             _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd, isTransfer: true)
-        } catch {
-            discardPartial()
-            throw error
+            staged = FileManager.default.fileExists(atPath: stagedURL.path)
         }
 
-        guard FileManager.default.fileExists(atPath: localDestURL.path) else {
+        guard staged else {
             throw NSError(domain: "SFTPService", code: 2, userInfo: [
                 NSLocalizedDescriptionKey: "Download failed: \(fileName) was not written to the local destination."
             ])
         }
+
+        // Move into place from the app process (the one that owns the folder permission).
+        if overwrite, FileManager.default.fileExists(atPath: localDestURL.path) {
+            try FileManager.default.removeItem(at: localDestURL)
+        }
+        try FileManager.default.moveItem(at: stagedURL, to: localDestURL)
         return localDestURL
     }
 
     /// Uploads `localURL` into `remoteDirectoryPath`. Unless `overwrite` is set, an existing
     /// remote item with the same name is kept and the upload gets a " 2" suffix.
+    /// sftp reports local-side access problems ("Couldn't change local directory", "Couldn't open
+    /// local file") when a TCC-protected folder is not readable by the child process.
+    static func isLocalAccessDenied(_ error: Error) -> Bool {
+        let text = error.localizedDescription.lowercased()
+        return text.contains("local") && (text.contains("operation not permitted") || text.contains("permission denied"))
+    }
+
     public func upload(localURL: URL, to remoteDirectoryPath: String, connection: RemoteConnection, password: String?, overwrite: Bool = false) async throws {
+        do {
+            try await uploadDirectly(localURL: localURL, to: remoteDirectoryPath, connection: connection, password: password, overwrite: overwrite)
+        } catch where Self.isLocalAccessDenied(error) {
+            // Copy with the app's own permission into the temp folder, then upload from there.
+            let staged = Self.stagedURL(for: localURL)
+            let dir = staged.deletingLastPathComponent()
+            try? FileManager.default.removeItem(at: dir)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            try FileManager.default.copyItem(at: localURL, to: staged)
+            try await uploadDirectly(localURL: staged, to: remoteDirectoryPath, connection: connection, password: password, overwrite: overwrite)
+        }
+    }
+
+    private func uploadDirectly(localURL: URL, to remoteDirectoryPath: String, connection: RemoteConnection, password: String?, overwrite: Bool) async throws {
         let cleanRemoteDir = Self.normalizeRemotePath(remoteDirectoryPath)
         let fileName = localURL.lastPathComponent.precomposedStringWithCanonicalMapping
         let localParentDir = localURL.deletingLastPathComponent().path

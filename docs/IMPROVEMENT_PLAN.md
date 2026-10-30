@@ -73,4 +73,4 @@ Legend as above. Order = execution order.
 - [-] 46. SwiftUI `Table` prototype for the file list — only after 27/28 land; needs a spike to confirm selection behaviour parity.
 - [-] 47. Developer ID signing + notarization — needs the owner's Apple Developer account (workflow is ready; add the secrets).
 - [x] 48. Homebrew tap `dohyun-yun/homebrew-yunsftp` with the `yunsftp` cask; release workflow bumps it when `TAP_GITHUB_TOKEN` is set.
-- [ ] 49. Stage downloads/uploads through the app's temp folder so the `sftp` child never has to touch TCC-protected folders (Downloads, Desktop, Documents) directly.
+- [x] 49. Stage downloads/uploads through the app's temp folder so the `sftp` child never has to touch TCC-protected folders (Downloads, Desktop, Documents) directly.

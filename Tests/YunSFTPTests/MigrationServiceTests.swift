@@ -16,3 +16,14 @@ final class MigrationServiceTests: XCTestCase {
         XCTAssertFalse(MigrationService.importedConnectionName(host: "box.local").contains("Synology"))
     }
 }
+
+extension MigrationServiceTests {
+    func testMigrationDoesNotPersistSettingsItself() throws {
+        // migrateFromForkLift2() must only *return* settings; saving is the caller's decision.
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/YunSFTP/Services/MigrationService.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(source.contains(".save()"))
+    }
+}

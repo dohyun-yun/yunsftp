@@ -852,7 +852,7 @@ public actor SFTPService {
 
             // Parse date if possible (parts 5, 6, 7)
             let dateStr = "\(parts[5]) \(parts[6]) \(parts[7])"
-            let modDate = Self.parseLsDate(dateStr) ?? Date()
+            let modDate = Self.parseLsDate(dateStr, now: Date()) ?? Date()
 
             let item = RemoteFileItem(
                 name: name,
@@ -869,17 +869,22 @@ public actor SFTPService {
         return items
     }
 
-    private static func parseLsDate(_ string: String) -> Date? {
+    static func parseLsDate(_ string: String, now: Date) -> Date? {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
 
-        // Format 1: "Oct 13 14:00"
+        // Format 1: "Oct 13 14:00" (ls omits the year for the last ~6 months). Assume the
+        // current year, but a resulting date in the future means it was last year.
         formatter.dateFormat = "MMM d HH:mm"
         if let d = formatter.date(from: string) {
             let calendar = Calendar.current
             var components = calendar.dateComponents([.month, .day, .hour, .minute], from: d)
-            components.year = calendar.component(.year, from: Date())
-            return calendar.date(from: components)
+            components.year = calendar.component(.year, from: now)
+            guard let candidate = calendar.date(from: components) else { return nil }
+            if candidate > now.addingTimeInterval(86_400) {
+                return calendar.date(byAdding: .year, value: -1, to: candidate)
+            }
+            return candidate
         }
 
         // Format 2: "Oct 13 2024"

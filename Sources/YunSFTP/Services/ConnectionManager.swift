@@ -43,6 +43,10 @@ public class ConnectionManager: ObservableObject {
                 self.connections = result.importedConnections
                 saveConnections()
             }
+            // View settings are adopted only on this one-time first launch, never on manual import.
+            if result.sourceFound {
+                result.importedSettings?.save()
+            }
             UserDefaults.standard.set(true, forKey: migrationDoneKey)
         }
     }

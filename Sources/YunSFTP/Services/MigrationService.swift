@@ -70,8 +70,6 @@ public struct MigrationService {
                 }
             }
         }
-        settings.save()
-
         // Parse binary plists: InitialFavorites, Favorites, ConnectPanelFavoriteHistory
         let targetKeys = ["InitialFavorites", "Favorites", "ConnectPanelFavoriteHistory"]
 

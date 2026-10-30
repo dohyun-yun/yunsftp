@@ -41,13 +41,21 @@ cp "$PROJECT_DIR/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 # Copy App Icon
 cp "$PROJECT_DIR/Resources/yunsftp.icns" "$APP_BUNDLE/Contents/Resources/yunsftp.icns"
 
-# Ad-hoc code sign for macOS with persistent designated requirement & entitlements
+# Code sign. SIGN_IDENTITY (e.g. "Developer ID Application: Name (TEAMID)") enables a real
+# signature with hardened runtime; otherwise an ad-hoc signature with a persistent designated
+# requirement so TCC grants (Full Disk Access) survive rebuilds.
 echo "=== Signing App Bundle ==="
-codesign --force --deep --sign - \
-    --identifier "com.finsternis.yunsftp" \
-    -r '=designated => identifier "com.finsternis.yunsftp"' \
-    --entitlements "$PROJECT_DIR/Resources/yunsftp.entitlements" \
-    "$APP_BUNDLE"
+if [ -n "${SIGN_IDENTITY:-}" ]; then
+    codesign --force --deep --options runtime --timestamp --sign "$SIGN_IDENTITY" \
+        --entitlements "$PROJECT_DIR/Resources/yunsftp.entitlements" \
+        "$APP_BUNDLE"
+else
+    codesign --force --deep --sign - \
+        --identifier "com.finsternis.yunsftp" \
+        -r '=designated => identifier "com.finsternis.yunsftp"' \
+        --entitlements "$PROJECT_DIR/Resources/yunsftp.entitlements" \
+        "$APP_BUNDLE"
+fi
 
 echo "=== Build Complete! App bundle created at: $APP_BUNDLE ==="
 file "$APP_BUNDLE/Contents/MacOS/yunsftp"

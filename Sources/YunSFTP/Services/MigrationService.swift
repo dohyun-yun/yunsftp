@@ -7,7 +7,7 @@ public struct MigrationResult: Sendable {
     public let sourceFound: Bool
 }
 
-public struct MigrationService {
+public struct MigrationService: Sendable {
     public static let shared = MigrationService()
 
     private let forkLift2PlistPath = ("~/Library/Preferences/com.binarynights.ForkLift2.plist" as NSString).expandingTildeInPath

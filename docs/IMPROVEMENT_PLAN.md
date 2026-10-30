@@ -41,8 +41,8 @@ Legend as above. Order = execution order.
 
 ## A. Release, settings, onboarding
 
-- [ ] 23. Release workflow: on `v*` tag build the app, create dmg/zip/checksums and attach to the GitHub Release (signing/notarization steps run only when secrets exist).
-- [ ] 24. Fix Swift 6 strict-concurrency warnings (ConnectionTestService captured var).
+- [x] 23. Release workflow: on `v*` tag build the app, create dmg/zip/checksums and attach to the GitHub Release (signing/notarization steps run only when secrets exist).
+- [x] 24. Fix Swift 6 strict-concurrency warnings (ConnectionTestService captured var).
 - [ ] 25. Settings window: font size, relative dates, visible columns, delete confirmation, terminal app, default legacy-algorithms flag.
 - [ ] 26. Import hosts from `~/.ssh/config` (and Cyberduck bookmarks if present) with a first-run empty state that offers it.
 - [ ] 27. List polish: relative dates by default, Perms hidden by default, `Kind` without "Remote" prefix, checkmark only for multi-selection, columns auto-hide in narrow panes.

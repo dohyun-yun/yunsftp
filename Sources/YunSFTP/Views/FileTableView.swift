@@ -24,6 +24,7 @@ public struct FileTableView: View {
     @State private var sortOrder: [KeyPathComparator<FileItem>] = []
 
     public var body: some View {
+        let items = pane.displayedItems
         Table(of: FileItem.self, selection: selectionBinding, sortOrder: $sortOrder, columnCustomization: $customization) {
             TableColumn(L("Name"), value: \.name) { item in
                 nameCell(item)
@@ -58,7 +59,7 @@ public struct FileTableView: View {
             .width(min: 60, ideal: 110)
             .customizationID("kind")
 
-            TableColumn(L("Perms"), value: \.posixPermissions) { item in
+            TableColumn(L("Perms")) { item in
                 Text(item.posixPermissions)
                     .font(secondaryFont.monospaced())
                     .foregroundStyle(.secondary)
@@ -67,7 +68,7 @@ public struct FileTableView: View {
             .customizationID("perms")
             .defaultVisibility(.hidden)
         } rows: {
-            ForEach(pane.displayedItems) { item in
+            ForEach(items) { item in
                 TableRow(item)
                     .itemProvider { dragProvider(for: item) }
                     .dropDestination(for: URL.self) { urls in handleDrop(urls, onto: item) }
@@ -78,9 +79,10 @@ public struct FileTableView: View {
             contextMenu(for: urls)
         } primaryAction: { urls in
             onActivate()
-            guard let url = urls.first, let item = pane.displayedItems.first(where: { $0.url == url }) else { return }
+            guard let url = Self.primaryTarget(in: urls, focused: pane.focusedItemURL), let item = items.first(where: { $0.url == url }) else { return }
             if item.isDirectory { pane.navigateTo(item.url) } else { onOpenItem(item) }
         }
+        .background(TableScrollBridge(rowIndex: items.firstIndex { $0.url == pane.focusedItemURL }))
         .onChange(of: sortOrder) { _, order in
             guard let first = order.first, let field = Self.sortField(for: first) else { return }
             pane.sortField = field
@@ -90,7 +92,7 @@ public struct FileTableView: View {
             sortOrder = Self.comparators(for: pane.sortField, ascending: pane.sortAscending)
         }
         .overlay {
-            if pane.displayedItems.isEmpty && !pane.isLoading {
+            if items.isEmpty && !pane.isLoading {
                 VStack(spacing: 8) {
                     Image(systemName: "folder").font(.system(size: 36)).foregroundStyle(.tertiary)
                     Text(L("Folder is Empty")).font(.title3).foregroundStyle(.secondary)
@@ -134,16 +136,30 @@ public struct FileTableView: View {
             get: { pane.selectedItemURLs },
             set: { newValue in
                 onActivate()
-                pane.selectedItemURLs = newValue
-                pane.pinnedSelectionURLs = newValue
-                if newValue.count == 1, let only = newValue.first {
-                    pane.focusedItemURL = only
-                    pane.selectionAnchorURL = only
-                } else if let f = pane.focusedItemURL, !newValue.contains(f), let any = newValue.first {
-                    pane.focusedItemURL = any
-                }
+                Self.applySelection(newValue, to: pane)
             }
         )
+    }
+
+    /// Same semantics as the list view: a single click selects without pinning (so arrows move a
+    /// plain selection), multi-selection is pinned (so arrows keep it and Space toggles members).
+    static func applySelection(_ newValue: Set<URL>, to pane: PaneModel) {
+        if newValue.count == 1, let only = newValue.first {
+            pane.selectSingle(only)
+        } else {
+            pane.selectedItemURLs = newValue
+            pane.pinnedSelectionURLs = newValue
+            if let f = pane.focusedItemURL, !newValue.contains(f) {
+                pane.focusedItemURL = newValue.sorted { $0.path < $1.path }.first
+            }
+        }
+    }
+
+    /// The row a double-click or single-item menu action targets: the keyboard cursor when it is
+    /// part of the selection, otherwise only an unambiguous single selection.
+    static func primaryTarget(in urls: Set<URL>, focused: URL?) -> URL? {
+        if let focused, urls.contains(focused) { return focused }
+        return urls.count == 1 ? urls.first : nil
     }
 
     // MARK: - Sorting bridge
@@ -176,7 +192,7 @@ public struct FileTableView: View {
         DragDropManager.shared.startDrag(items: itemsToDrag, from: pane)
         if pane.isRemote, let conn = pane.remoteConnection {
             let pwd = pane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
-            return RemoteDragProvider.make(item: item, connection: conn, password: pwd)
+            return RemoteDragProvider.make(item: item, connection: conn, password: pwd, session: DragDropManager.shared.currentSession)
         }
         return DragDropManager.shared.makeProvider(for: item.url)
     }
@@ -184,12 +200,12 @@ public struct FileTableView: View {
     private func handleDrop(_ urls: [URL], onto item: FileItem) {
         onActivate()
         let target: FileItem? = item.isDirectory ? item : nil
-        // The table hands us payloads, not providers: an internal drop is one whose URLs are the
-        // items this app started dragging; anything else came from another app.
+        // The table hands us payloads, not providers. A drag that ended elsewhere clears its own
+        // state when its provider is released, so any cached items belong to a live session; the
+        // dropped URLs still have to match them to count as internal.
         let dragged = Set(DragDropManager.shared.draggedItems.map { $0.url.absoluteString })
         let internalDrop = !dragged.isEmpty && urls.contains { dragged.contains($0.absoluteString) }
         let providers = internalDrop ? [] : urls.map { NSItemProvider(object: $0 as NSURL) }
-        if !internalDrop { DragDropManager.shared.endDrag() }
         DragDropManager.shared.handleDrop(onto: pane, targetSubfolder: target, externalProviders: providers) {
             pane.reload()
         }
@@ -199,8 +215,10 @@ public struct FileTableView: View {
 
     @ViewBuilder
     private func contextMenu(for urls: Set<URL>) -> some View {
-        let items = pane.displayedItems.filter { urls.contains($0.url) }
-        if let item = items.first {
+        let all = pane.displayedItems
+        let items = all.filter { urls.contains($0.url) }
+        let targetURL = Self.primaryTarget(in: urls, focused: pane.focusedItemURL) ?? items.first?.url
+        if let item = all.first(where: { $0.url == targetURL }) {
             Button(L("Open (Cmd+O)")) {
                 onActivate()
                 if item.isDirectory { pane.navigateTo(item.url) } else { onOpenItem(item) }
@@ -215,6 +233,7 @@ public struct FileTableView: View {
                     }
                 }
             }
+            Button(L("Toggle Selection (Space)")) { onActivate(); pane.toggleSelection(item.url) }
             Button(L("Quick Look (Cmd+Y)")) { onActivate(); onQuickLook(item) }
             Button(L("Get Info (Cmd+I)")) { onActivate(); onShowInfo(item) }
             Divider()
@@ -246,6 +265,37 @@ public struct FileTableView: View {
         if !urls.isSubset(of: pane.selectedItemURLs) {
             pane.selectedItemURLs = urls
             pane.pinnedSelectionURLs = urls
+        }
+    }
+}
+
+
+/// Keeps the keyboard cursor visible: finds the enclosing `NSTableView` and scrolls to the focused row.
+struct TableScrollBridge: NSViewRepresentable {
+    let rowIndex: Int?
+
+    func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        guard let row = rowIndex else { return }
+        DispatchQueue.main.async {
+            guard let window = view.window, let table = Self.tableView(near: view, in: window.contentView) else { return }
+            if row >= 0 && row < table.numberOfRows { table.scrollRowToVisible(row) }
+        }
+    }
+
+    /// The table whose frame overlaps this (background) view: each pane has its own.
+    static func tableView(near anchor: NSView, in root: NSView?) -> NSTableView? {
+        guard let root, let anchorWindowFrame = anchor.superview?.convert(anchor.frame, to: nil) else { return nil }
+        var found: [NSTableView] = []
+        func walk(_ v: NSView) {
+            if let t = v as? NSTableView { found.append(t) }
+            v.subviews.forEach(walk)
+        }
+        walk(root)
+        return found.first { t in
+            guard let frame = t.superview?.convert(t.frame, to: nil) else { return false }
+            return frame.intersects(anchorWindowFrame)
         }
     }
 }

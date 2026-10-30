@@ -23,3 +23,27 @@ final class FileTableViewTests: XCTestCase {
         XCTAssertEqual(round.viewMode, .table)
     }
 }
+
+extension FileTableViewTests {
+    func testSelectionBridgeKeepsListViewSemantics() {
+        let pane = PaneModel(initialURL: FileManager.default.temporaryDirectory, autoLoad: false)
+        let a = URL(fileURLWithPath: "/tmp/a"), b = URL(fileURLWithPath: "/tmp/b")
+        FileTableView.applySelection([a], to: pane)
+        XCTAssertEqual(pane.selectedItemURLs, [a])
+        XCTAssertTrue(pane.pinnedSelectionURLs.isEmpty, "a single click is not pinned, so arrows move a plain selection")
+        XCTAssertEqual(pane.focusedItemURL, a)
+        FileTableView.applySelection([a, b], to: pane)
+        XCTAssertEqual(pane.pinnedSelectionURLs, [a, b])
+        XCTAssertEqual(pane.focusedItemURL, a, "focus stays when it is still selected")
+        FileTableView.applySelection([b], to: pane)
+        XCTAssertEqual(pane.focusedItemURL, b)
+    }
+
+    func testPrimaryTargetPrefersTheKeyboardCursorAndRefusesAmbiguity() {
+        let a = URL(fileURLWithPath: "/a"), b = URL(fileURLWithPath: "/b")
+        XCTAssertEqual(FileTableView.primaryTarget(in: [a, b], focused: b), b)
+        XCTAssertNil(FileTableView.primaryTarget(in: [a, b], focused: nil))
+        XCTAssertNil(FileTableView.primaryTarget(in: [a, b], focused: URL(fileURLWithPath: "/c")))
+        XCTAssertEqual(FileTableView.primaryTarget(in: [a], focused: nil), a)
+    }
+}

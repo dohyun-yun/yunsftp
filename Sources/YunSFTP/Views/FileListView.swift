@@ -281,7 +281,7 @@ public struct FileListView: View {
                                     dragProvider: {
                                         if pane.isRemote, let conn = pane.remoteConnection {
                                             let pwd = pane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
-                                            return RemoteDragProvider.make(item: item, connection: conn, password: pwd)
+                                            return RemoteDragProvider.make(item: item, connection: conn, password: pwd, session: DragDropManager.shared.currentSession)
                                         }
                                         return DragDropManager.shared.makeProvider(for: item.url)
                                     },

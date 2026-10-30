@@ -205,6 +205,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     w.makeKeyAndOrderFront(nil)
                 }
             }
+            Task.detached(priority: .background) { RemoteDragProvider.cleanUpTempCopies() }
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 3_000_000_000)   // let the window settle first
                 await UpdateChecker.shared.checkAtLaunchIfDue()

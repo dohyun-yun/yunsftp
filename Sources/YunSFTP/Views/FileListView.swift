@@ -278,6 +278,13 @@ public struct FileListView: View {
                                         let itemsToDrag = pane.selectedItemURLs.contains(item.url) ? pane.selectedItems : [item]
                                         DragDropManager.shared.startDrag(items: itemsToDrag, from: pane)
                                     },
+                                    dragProvider: {
+                                        if pane.isRemote, let conn = pane.remoteConnection {
+                                            let pwd = pane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
+                                            return RemoteDragProvider.make(item: item, connection: conn, password: pwd)
+                                        }
+                                        return NSItemProvider(object: item.url as NSURL)
+                                    },
                                     onDropOntoFolder: { providers in
                                         onActivate()
                                         DragDropManager.shared.handleDrop(onto: pane, targetSubfolder: item, externalProviders: providers) {
@@ -540,6 +547,7 @@ public struct FileRowView: View {
     let onSelect: (Bool, Bool) -> Void
     let onDoubleClick: () -> Void
     let onDragStart: () -> Void
+    var dragProvider: (() -> NSItemProvider)? = nil
     let onDropOntoFolder: ([NSItemProvider]) -> Void
     let onDropOntoPane: ([NSItemProvider]) -> Void
 
@@ -649,7 +657,7 @@ public struct FileRowView: View {
         .onDrag {
             onActivate()
             onDragStart()
-            return NSItemProvider(object: item.url as NSURL)
+            return dragProvider?() ?? NSItemProvider(object: item.url as NSURL)
         }
         .onDrop(of: [.fileURL, .url, .text, .plainText], isTargeted: $isFolderDropTarget) { providers in
             onActivate()

@@ -205,7 +205,7 @@ public actor SFTPService {
             if !items.isEmpty || sftpOutput.contains("total") || sftpOutput.contains("drwx") || sftpOutput.contains("-rw") || sftpOutput.contains("sftp>") {
                 return items
             }
-        } catch {
+        } catch where !Self.isAuthenticationFailure(error) {
             // If cd failed in SFTP, try direct 'ls -la "path"' via SFTP batch
             do {
                 let fallbackOutput = try await executeSFTPBatch(commands: ["ls -la \(Self.sftpQuote(targetPath))"], connection: connection, password: password)
@@ -213,7 +213,7 @@ public actor SFTPService {
                 if !items.isEmpty || fallbackOutput.contains("total") || fallbackOutput.contains("drwx") || fallbackOutput.contains("-rw") || fallbackOutput.contains("sftp>") {
                     return items
                 }
-            } catch {
+            } catch where !Self.isAuthenticationFailure(error) {
                 if connection.host == "local-sftp-server" {
                     throw error
                 }
@@ -257,7 +257,7 @@ public actor SFTPService {
         ]
         do {
             _ = try await executeSFTPBatch(commands: sftpCommands, connection: connection, password: effectivePwd)
-        } catch {
+        } catch where !Self.isAuthenticationFailure(error) {
             if FileManager.default.fileExists(atPath: destPath) || FileManager.default.fileExists(atPath: localDestURL.path) {
                 return localDestURL
             }
@@ -273,7 +273,7 @@ public actor SFTPService {
         ]
         do {
             _ = try await executeSFTPBatch(commands: directCmds, connection: connection, password: effectivePwd)
-        } catch {
+        } catch where !Self.isAuthenticationFailure(error) {
             if FileManager.default.fileExists(atPath: destPath) || FileManager.default.fileExists(atPath: localDestURL.path) {
                 return localDestURL
             }
@@ -319,7 +319,7 @@ public actor SFTPService {
         ]
         do {
             _ = try await executeSFTPBatch(commands: sftpCommands, connection: connection, password: effectivePwd)
-        } catch {
+        } catch where !Self.isAuthenticationFailure(error) {
             // 2. Direct put with remote path
             let directCmds = [
                 "lcd \(Self.sftpQuote(localParentDir))",
@@ -327,7 +327,7 @@ public actor SFTPService {
             ]
             do {
                 _ = try await executeSFTPBatch(commands: directCmds, connection: connection, password: effectivePwd)
-            } catch {
+            } catch where !Self.isAuthenticationFailure(error) {
                 // 3. Fallback to scp (quoting remoteDest for remote shell execution)
                 var args = ["-P", "\(connection.port)"]
                 args.append(contentsOf: Self.commonSSHOptions)
@@ -361,11 +361,11 @@ public actor SFTPService {
         do {
             _ = try await executeSFTPBatch(commands: cmds, connection: connection, password: effectivePwd)
             return
-        } catch {
+        } catch where !Self.isAuthenticationFailure(error) {
             do {
                 _ = try await executeSFTPBatch(commands: ["mkdir \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
                 return
-            } catch {
+            } catch where !Self.isAuthenticationFailure(error) {
                 if connection.host == "local-sftp-server" {
                     throw error
                 }
@@ -391,11 +391,11 @@ public actor SFTPService {
             do {
                 _ = try await executeSFTPBatch(commands: cdRmCmds, connection: connection, password: effectivePwd)
                 return
-            } catch {
+            } catch where !Self.isAuthenticationFailure(error) {
                 do {
                     _ = try await executeSFTPBatch(commands: ["rm \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
                     return
-                } catch {
+                } catch where !Self.isAuthenticationFailure(error) {
                     if connection.host == "local-sftp-server" {
                         throw error
                     }
@@ -412,11 +412,11 @@ public actor SFTPService {
             do {
                 _ = try await executeSFTPBatch(commands: cdRmdirCmds, connection: connection, password: effectivePwd)
                 return
-            } catch {
+            } catch where !Self.isAuthenticationFailure(error) {
                 do {
                     try await removeDirectoryRecursivelySFTP(remotePath: nfc, connection: connection, password: effectivePwd)
                     return
-                } catch {
+                } catch where !Self.isAuthenticationFailure(error) {
                     if connection.host == "local-sftp-server" {
                         throw error
                     }
@@ -447,7 +447,7 @@ public actor SFTPService {
             }
             do {
                 _ = try await executeSFTPBatch(commands: batchCmds, connection: connection, password: password)
-            } catch {
+            } catch where !Self.isAuthenticationFailure(error) {
                 // Fallback to individual removal if batch had a hiccup
                 for f in files {
                     try await remove(remotePath: f.remotePath, isDirectory: false, connection: connection, password: password)
@@ -465,7 +465,7 @@ public actor SFTPService {
         ]
         do {
             _ = try await executeSFTPBatch(commands: cmds, connection: connection, password: password)
-        } catch {
+        } catch where !Self.isAuthenticationFailure(error) {
             _ = try await executeSFTPBatch(commands: ["rmdir \(Self.sftpQuote(nfc))"], connection: connection, password: password)
         }
     }
@@ -490,7 +490,7 @@ public actor SFTPService {
             do {
                 _ = try await executeSFTPBatch(commands: cmds, connection: connection, password: effectivePwd)
                 return
-            } catch {
+            } catch where !Self.isAuthenticationFailure(error) {
                 // Fallback to full path rename below
             }
         }
@@ -498,7 +498,7 @@ public actor SFTPService {
         do {
             _ = try await executeSFTPBatch(commands: ["rename \(Self.sftpQuote(nfcSrc)) \(Self.sftpQuote(nfcDst))"], connection: connection, password: effectivePwd)
             return
-        } catch {
+        } catch where !Self.isAuthenticationFailure(error) {
             if connection.host == "local-sftp-server" {
                 throw error
             }
@@ -522,11 +522,11 @@ public actor SFTPService {
             do {
                 _ = try await executeSFTPBatch(commands: cmds, connection: connection, password: effectivePwd)
                 return
-            } catch {
+            } catch where !Self.isAuthenticationFailure(error) {
                 do {
                     _ = try await executeSFTPBatch(commands: ["chmod \(mode) \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
                     return
-                } catch {
+                } catch where !Self.isAuthenticationFailure(error) {
                     if connection.host == "local-sftp-server" {
                         throw error
                     }
@@ -543,7 +543,7 @@ public actor SFTPService {
         let cmd = "test -e \(Self.posixShellEscape(nfc)) && chmod \(recFlag)\(mode) \(Self.posixShellEscape(nfc))"
         do {
             _ = try await executeSSH(command: cmd, connection: connection, password: effectivePwd)
-        } catch {
+        } catch where !Self.isAuthenticationFailure(error) {
             _ = try await executeSFTPBatch(commands: ["chmod \(mode) \(Self.sftpQuote(nfc))"], connection: connection, password: effectivePwd)
         }
     }
@@ -716,7 +716,8 @@ public actor SFTPService {
                     .filter { !$0.contains("WARNING") && !$0.isEmpty }
                     .joined(separator: " ")
                 let friendly = Self.translateErrorMessage(cleanErr, exitCode: Int(process.terminationStatus))
-                throw NSError(domain: "SFTPService", code: Int(process.terminationStatus), userInfo: [
+                let code = Self.isAuthenticationFailureText(cleanErr) ? Self.authenticationFailureCode : Int(process.terminationStatus)
+                throw NSError(domain: "SFTPService", code: code, userInfo: [
                     NSLocalizedDescriptionKey: friendly
                 ])
             }
@@ -728,6 +729,25 @@ public actor SFTPService {
             }
             throw error
         }
+    }
+
+    /// Error code used when the SSH server rejected the credentials. Callers must not retry
+    /// with alternative transports on this error: every retry is another failed login that
+    /// can trigger fail2ban / NAS auto-block.
+    static let authenticationFailureCode = -1001
+
+    static func isAuthenticationFailure(_ error: Error) -> Bool {
+        let ns = error as NSError
+        return ns.domain == "SFTPService" && ns.code == authenticationFailureCode
+    }
+
+    static func isAuthenticationFailureText(_ rawError: String) -> Bool {
+        let lower = rawError.lowercased()
+        return lower.contains("permission denied (publickey") ||
+            lower.contains("permission denied (password") ||
+            lower.contains("permission denied (keyboard-interactive") ||
+            lower.contains("authentication failed") ||
+            lower.contains("too many authentication failures")
     }
 
     static func translateErrorMessage(_ rawError: String, exitCode: Int) -> String {
@@ -750,10 +770,7 @@ public actor SFTPService {
         }
 
         // 2. Authentication failure (strictly when SSH/SFTP rejects login credentials)
-        if lower.contains("permission denied (publickey") ||
-           lower.contains("permission denied (password") ||
-           lower.contains("permission denied (keyboard-interactive") ||
-           lower.contains("authentication failed") {
+        if isAuthenticationFailureText(rawError) {
             return "인증 실패: 사용자명 또는 비밀번호가 올바르지 않습니다 (Permission denied)."
         }
 

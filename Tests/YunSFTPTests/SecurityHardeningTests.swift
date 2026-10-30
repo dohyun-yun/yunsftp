@@ -36,3 +36,34 @@ final class SecurityHardeningTests: XCTestCase {
         XCTAssertTrue(msg.contains("ssh-keygen -R"))
     }
 }
+
+extension SecurityHardeningTests {
+
+    // MARK: - Item 3: authentication failures must not trigger transport fallbacks
+
+    func testAuthenticationFailureIsRecognisedFromSSHOutput() {
+        XCTAssertTrue(SFTPService.isAuthenticationFailureText("user@host: Permission denied (publickey,password)."))
+        XCTAssertTrue(SFTPService.isAuthenticationFailureText("Received disconnect: Too many authentication failures"))
+        XCTAssertFalse(SFTPService.isAuthenticationFailureText("Couldn't stat remote file: No such file or directory"))
+        XCTAssertFalse(SFTPService.isAuthenticationFailureText("remote open(\"/root/x\"): Permission denied"))
+    }
+
+    func testAuthenticationFailureErrorIsTyped() {
+        let auth = NSError(domain: "SFTPService", code: SFTPService.authenticationFailureCode)
+        let other = NSError(domain: "SFTPService", code: 1)
+        XCTAssertTrue(SFTPService.isAuthenticationFailure(auth))
+        XCTAssertFalse(SFTPService.isAuthenticationFailure(other))
+    }
+
+    func testFallbackCatchClausesSkipAuthenticationFailures() throws {
+        // Every transport fallback in SFTPService must be guarded so that an auth failure
+        // propagates instead of retrying with a different transport (= another failed login).
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/YunSFTP/Services/SFTPService.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let bareCatches = source.components(separatedBy: "\n").filter { $0.trimmingCharacters(in: .whitespaces) == "} catch {" }
+        // Only runProcess' own cleanup catches may remain unguarded.
+        XCTAssertEqual(bareCatches.count, 2, "unguarded catch blocks: \(bareCatches.count)")
+    }
+}

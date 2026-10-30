@@ -109,6 +109,20 @@ public actor SFTPService {
         return URL(fileURLWithPath: cleanPath)
     }
 
+    /// "name.ext" -> "name 2.ext", "name 3.ext", ... until it is not in `existing`.
+    /// Mirrors the local copy behaviour so SFTP transfers never silently overwrite.
+    public static func uniqueName(_ name: String, existing: Set<String>) -> String {
+        guard existing.contains(name) else { return name }
+        let ext = (name as NSString).pathExtension
+        let base = (name as NSString).deletingPathExtension
+        var count = 2
+        while true {
+            let candidate = ext.isEmpty ? "\(base) \(count)" : "\(base) \(count).\(ext)"
+            if !existing.contains(candidate) { return candidate }
+            count += 1
+        }
+    }
+
     /// POSIX single-quote escaping for remote SSH commands
     public static func posixShellEscape(_ string: String) -> String {
         return "'" + string.replacingOccurrences(of: "'", with: "'\\''") + "'"
@@ -259,15 +273,20 @@ public actor SFTPService {
         return nil
     }
 
-    public func download(remotePath: String, to localDirectory: URL, connection: RemoteConnection, password: String?) async throws -> URL {
+    /// Downloads `remotePath` into `localDirectory`. Unless `overwrite` is set, an existing
+    /// local item with the same name is kept and the download gets a " 2" suffix.
+    public func download(remotePath: String, to localDirectory: URL, connection: RemoteConnection, password: String?, overwrite: Bool = false) async throws -> URL {
         let cleanRemotePath = Self.normalizeRemotePath(remotePath)
         let fileName = (cleanRemotePath as NSString).lastPathComponent
         let parentDir = (cleanRemotePath as NSString).deletingLastPathComponent
         let remoteParent = parentDir.isEmpty ? "/" : parentDir
-        let localDestURL = localDirectory.appendingPathComponent(fileName)
         let effectivePwd = resolvePassword(password: password, connection: connection)
 
         try? FileManager.default.createDirectory(at: localDirectory, withIntermediateDirectories: true)
+
+        let localNames = Set(((try? FileManager.default.contentsOfDirectory(atPath: localDirectory.path)) ?? []).map { $0.precomposedStringWithCanonicalMapping })
+        let destName = overwrite ? fileName : Self.uniqueName(fileName, existing: localNames)
+        let localDestURL = localDirectory.appendingPathComponent(destName)
 
         let destPath = localDestURL.path.precomposedStringWithCanonicalMapping
 
@@ -275,7 +294,7 @@ public actor SFTPService {
         let sftpCommands: [String] = [
             "lcd \(Self.sftpQuote(localDirectory.path))",
             "cd \(Self.sftpQuote(remoteParent))",
-            "get -R \(Self.sftpQuote(fileName))"
+            "get -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(destName))"
         ]
         do {
             _ = try await executeSFTPBatch(commands: sftpCommands, connection: connection, password: effectivePwd)
@@ -291,7 +310,7 @@ public actor SFTPService {
         // 2. Direct get with quotes if remoteParent cd failed
         let directCmds = [
             "lcd \(Self.sftpQuote(localDirectory.path))",
-            "get -R \(Self.sftpQuote(cleanRemotePath))"
+            "get -R \(Self.sftpQuote(cleanRemotePath)) \(Self.sftpQuote(destName))"
         ]
         do {
             _ = try await executeSFTPBatch(commands: directCmds, connection: connection, password: effectivePwd)
@@ -327,17 +346,26 @@ public actor SFTPService {
         return localDestURL
     }
 
-    public func upload(localURL: URL, to remoteDirectoryPath: String, connection: RemoteConnection, password: String?) async throws {
+    /// Uploads `localURL` into `remoteDirectoryPath`. Unless `overwrite` is set, an existing
+    /// remote item with the same name is kept and the upload gets a " 2" suffix.
+    public func upload(localURL: URL, to remoteDirectoryPath: String, connection: RemoteConnection, password: String?, overwrite: Bool = false) async throws {
         let cleanRemoteDir = Self.normalizeRemotePath(remoteDirectoryPath)
         let fileName = localURL.lastPathComponent.precomposedStringWithCanonicalMapping
         let localParentDir = localURL.deletingLastPathComponent().path
         let effectivePwd = resolvePassword(password: password, connection: connection)
 
+        var remoteName = fileName
+        if !overwrite {
+            let siblings = (try? await listDirectory(path: cleanRemoteDir, connection: connection, password: effectivePwd)) ?? []
+            remoteName = Self.uniqueName(fileName, existing: Set(siblings.map { $0.name }))
+        }
+        let remoteDest = cleanRemoteDir == "/" ? "/\(remoteName)" : "\(cleanRemoteDir)/\(remoteName)"
+
         // 1. Primary: SFTP batch using lcd (local parent) + cd (remote dir) + put -R (filename)
         let sftpCommands: [String] = [
             "lcd \(Self.sftpQuote(localParentDir))",
             "cd \(Self.sftpQuote(cleanRemoteDir))",
-            "put -R \(Self.sftpQuote(fileName))"
+            "put -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(remoteName))"
         ]
         do {
             _ = try await executeSFTPBatch(commands: sftpCommands, connection: connection, password: effectivePwd)
@@ -345,7 +373,7 @@ public actor SFTPService {
             // 2. Direct put with remote path
             let directCmds = [
                 "lcd \(Self.sftpQuote(localParentDir))",
-                "put -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(cleanRemoteDir))"
+                "put -R \(Self.sftpQuote(fileName)) \(Self.sftpQuote(remoteDest))"
             ]
             do {
                 _ = try await executeSFTPBatch(commands: directCmds, connection: connection, password: effectivePwd)
@@ -360,8 +388,8 @@ public actor SFTPService {
                 }
 
                 let userPart = connection.username.isEmpty ? "" : "\(connection.username)@"
-                let remoteDest = "\(userPart)\(connection.host):\(Self.posixShellEscape(cleanRemoteDir))"
-                args.append(contentsOf: ["-r", localURL.path, remoteDest])
+                let remoteSpec = "\(userPart)\(connection.host):\(Self.posixShellEscape(remoteDest))"
+                args.append(contentsOf: ["-r", localURL.path, remoteSpec])
 
                 _ = try await runProcess(executable: "/usr/bin/scp", arguments: args, password: effectivePwd)
             }

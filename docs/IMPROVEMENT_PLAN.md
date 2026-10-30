@@ -24,7 +24,7 @@ Status board for the hardening pass. One commit per item. Legend: `[ ]` todo, `[
 
 - [x] 13. Hide unimplemented protocols (FTP/SMB/WebDAV); remove no-op "New Window" command.
 - [x] 14. Transfer cancel terminates the running process.
-- [ ] 15. Consistent "keep both" conflict handling for SFTP upload/download (match local copy behaviour).
+- [x] 15. Consistent "keep both" conflict handling for SFTP upload/download (match local copy behaviour).
 - [x] 16. Migration must not overwrite current settings on manual import; `ls` date parsing year rollover.
 - [-] 17. Real transfer progress for upload (needs sftp progress parsing or a native SFTP library).
 - [-] 18. Settings/Preferences window for `AppSettings` fields.

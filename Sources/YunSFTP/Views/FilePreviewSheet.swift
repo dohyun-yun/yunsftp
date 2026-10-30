@@ -223,7 +223,7 @@ public struct FilePreviewSheet: View {
             Task {
                 do {
                     try contentToSave.write(to: targetURL, atomically: true, encoding: .utf8)
-                    try await SFTPService.shared.upload(localURL: targetURL, to: remoteParent.isEmpty ? "/" : remoteParent, connection: conn, password: pwd)
+                    try await SFTPService.shared.upload(localURL: targetURL, to: remoteParent.isEmpty ? "/" : remoteParent, connection: conn, password: pwd, overwrite: true)
                     await MainActor.run {
                         hasChanges = false
                         isSaving = false

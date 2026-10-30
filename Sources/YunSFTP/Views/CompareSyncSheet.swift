@@ -161,14 +161,14 @@ public struct CompareSyncSheet: View {
             let pwd = srcPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
             for item in items {
                 let remotePath = SFTPService.normalizeRemotePath(item.url.path)
-                _ = try? await SFTPService.shared.download(remotePath: remotePath, to: dstPane.currentURL, connection: conn, password: pwd)
+                _ = try? await SFTPService.shared.download(remotePath: remotePath, to: dstPane.currentURL, connection: conn, password: pwd, overwrite: true)
             }
         } else if !srcPane.isRemote && dstPane.isRemote {
             guard let conn = dstPane.remoteConnection else { return }
             let pwd = dstPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
             let remoteDir = SFTPService.normalizeRemotePath(dstPane.remotePath)
             for item in items {
-                try? await SFTPService.shared.upload(localURL: item.url, to: remoteDir, connection: conn, password: pwd)
+                try? await SFTPService.shared.upload(localURL: item.url, to: remoteDir, connection: conn, password: pwd, overwrite: true)
             }
         } else if srcPane.isRemote && dstPane.isRemote {
             guard let srcConn = srcPane.remoteConnection, let dstConn = dstPane.remoteConnection else { return }
@@ -180,7 +180,7 @@ public struct CompareSyncSheet: View {
                 try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
                 let remotePath = SFTPService.normalizeRemotePath(item.url.path)
                 if let downloaded = try? await SFTPService.shared.download(remotePath: remotePath, to: tempDir, connection: srcConn, password: srcPwd) {
-                    try? await SFTPService.shared.upload(localURL: downloaded, to: remoteDir, connection: dstConn, password: dstPwd)
+                    try? await SFTPService.shared.upload(localURL: downloaded, to: remoteDir, connection: dstConn, password: dstPwd, overwrite: true)
                 }
                 try? FileManager.default.removeItem(at: tempDir)
             }

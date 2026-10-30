@@ -66,8 +66,8 @@ public actor FileSystemService {
 
     public func move(urls: [URL], to destinationDirectory: URL, overwrite: Bool = false) async throws {
         for src in urls {
-            // Avoid moving folder into itself
-            if destinationDirectory.path.hasPrefix(src.path) {
+            // Avoid moving folder into itself (component-wise, so /a/b does not block /a/bc)
+            if Self.isSameOrDescendant(destinationDirectory, of: src) {
                 throw NSError(domain: "yunsftp", code: 3, userInfo: [NSLocalizedDescriptionKey: "Cannot move a folder into itself"])
             }
             var dest = destinationDirectory.appendingPathComponent(src.lastPathComponent)
@@ -134,7 +134,7 @@ public actor FileSystemService {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
         process.currentDirectoryURL = URL(fileURLWithPath: parentDir)
-        process.arguments = ["-r", zipURL.path] + itemNames
+        process.arguments = ["-r", zipURL.path, "--"] + itemNames
 
         try process.run()
         process.waitUntilExit()
@@ -204,6 +204,12 @@ public actor FileSystemService {
             leftItems: leftFiles.map { FileItem(url: $0) },
             rightItems: rightFiles.map { FileItem(url: $0) }
         )
+    }
+
+    static func isSameOrDescendant(_ candidate: URL, of ancestor: URL) -> Bool {
+        let a = ancestor.standardizedFileURL.pathComponents
+        let c = candidate.standardizedFileURL.pathComponents
+        return c.count >= a.count && Array(c.prefix(a.count)) == a
     }
 
     private func uniqueDestinationURL(for url: URL) -> URL {

@@ -228,7 +228,8 @@ public struct ConnectSheet: View {
     }
 
     private func createNewConnection() {
-        let newConn = RemoteConnection(name: "New Server", connectionProtocol: .sftp, host: "", port: 22)
+        let newConn = RemoteConnection(name: "New Server", connectionProtocol: .sftp, host: "", port: 22,
+                                       allowLegacyAlgorithms: SettingsStore.shared.settings.legacyAlgorithmsByDefault)
         connectionManager.addConnection(newConn)
         selectedConnectionId = newConn.id
         testResult = nil

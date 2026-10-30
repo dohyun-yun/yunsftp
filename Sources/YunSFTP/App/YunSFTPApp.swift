@@ -99,7 +99,18 @@ enum DemoHelper {
 struct YunSFTPApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    /// Opens the standard Settings scene (works on macOS 13 and 14+ without the `openSettings` environment action).
+    static func openSettings() {
+        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
+            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        }
+    }
+
     var body: some Scene {
+        Settings {
+            SettingsView()
+        }
+
         WindowGroup {
             if DemoHelper.isDemoMode {
                 let demo = DemoHelper.createDemoPanes()
@@ -111,6 +122,10 @@ struct YunSFTPApp: App {
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
         .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { Self.openSettings() }
+                    .keyboardShortcut(",", modifiers: .command)
+            }
             SidebarCommands()
             // Single-window app: drop the default File > New items instead of offering a no-op.
             CommandGroup(replacing: .newItem) {}

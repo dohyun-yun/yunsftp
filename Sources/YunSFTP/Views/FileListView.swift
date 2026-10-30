@@ -21,6 +21,23 @@ public struct FileListView: View {
     @AppStorage("colWidth_date") private var dateWidth: Double = 135
     @AppStorage("colWidth_kind") private var kindWidth: Double = 95
     @AppStorage("colWidth_perms") private var permsWidth: Double = 65
+    @ObservedObject private var settingsStore = SettingsStore.shared
+
+    public struct ColumnVisibility: Equatable {
+        public var size: Bool
+        public var date: Bool
+        public var kind: Bool
+        public var perms: Bool
+    }
+
+    /// Which optional columns to draw: the user's choice, minus what cannot fit. Narrow panes drop
+    /// Permissions first, then Kind, so the name column never collapses.
+    public static func visibleColumns(paneWidth: Double, settings: AppSettings) -> ColumnVisibility {
+        var v = ColumnVisibility(size: settings.showSize, date: settings.showDateModified, kind: settings.showKind, perms: settings.showPermissions)
+        if paneWidth < 560 { v.perms = false }
+        if paneWidth < 460 { v.kind = false }
+        return v
+    }
 
     public static func totalColumnsWidth(
         nameWidth: Double,
@@ -105,7 +122,7 @@ public struct FileListView: View {
     }
 
     @ViewBuilder
-    private func tableHeaderBar(tableWidth: Double, nameColumnWidth: Double) -> some View {
+    private func tableHeaderBar(tableWidth: Double, nameColumnWidth: Double, columns: ColumnVisibility) -> some View {
         HStack(spacing: 0) {
             headerCell("Name", field: .name, alignment: .leading, width: nameColumnWidth)
             ColumnResizeDivider(
@@ -118,17 +135,22 @@ public struct FileListView: View {
                 defaultWidth: 220
             )
 
-            headerCell("Size", field: .size, alignment: .trailing, width: sizeWidth)
-            ColumnResizeDivider(width: $sizeWidth, minWidth: 50, maxWidth: 300, defaultWidth: 80)
-
-            headerCell("Date Modified", field: .date, alignment: .leading, width: dateWidth)
-            ColumnResizeDivider(width: $dateWidth, minWidth: 80, maxWidth: 350, defaultWidth: 135)
-
-            headerCell("Kind", field: .kind, alignment: .leading, width: kindWidth)
-            ColumnResizeDivider(width: $kindWidth, minWidth: 50, maxWidth: 300, defaultWidth: 95)
-
-            headerCell("Perms", field: nil, alignment: .center, width: permsWidth)
-            ColumnResizeDivider(width: $permsWidth, minWidth: 45, maxWidth: 200, defaultWidth: 65)
+            if columns.size {
+                headerCell("Size", field: .size, alignment: .trailing, width: sizeWidth)
+                ColumnResizeDivider(width: $sizeWidth, minWidth: 50, maxWidth: 300, defaultWidth: 80)
+            }
+            if columns.date {
+                headerCell("Date Modified", field: .date, alignment: .leading, width: dateWidth)
+                ColumnResizeDivider(width: $dateWidth, minWidth: 80, maxWidth: 350, defaultWidth: 135)
+            }
+            if columns.kind {
+                headerCell("Kind", field: .kind, alignment: .leading, width: kindWidth)
+                ColumnResizeDivider(width: $kindWidth, minWidth: 50, maxWidth: 300, defaultWidth: 95)
+            }
+            if columns.perms {
+                headerCell("Perms", field: nil, alignment: .center, width: permsWidth)
+                ColumnResizeDivider(width: $permsWidth, minWidth: 45, maxWidth: 200, defaultWidth: 65)
+            }
 
             Spacer(minLength: 0)
         }
@@ -139,27 +161,33 @@ public struct FileListView: View {
 
     public var body: some View {
         GeometryReader { geo in
+            let settings = settingsStore.settings
+            let columns = Self.visibleColumns(paneWidth: geo.size.width, settings: settings)
+            let sizeW = columns.size ? sizeWidth : 0
+            let dateW = columns.date ? dateWidth : 0
+            let kindW = columns.kind ? kindWidth : 0
+            let permsW = columns.perms ? permsWidth : 0
             let effectiveNameW = Self.effectiveNameColumnWidth(
                 paneWidth: geo.size.width,
                 nameWidth: nameWidth,
-                sizeWidth: sizeWidth,
-                dateWidth: dateWidth,
-                kindWidth: kindWidth,
-                permsWidth: permsWidth
+                sizeWidth: sizeW,
+                dateWidth: dateW,
+                kindWidth: kindW,
+                permsWidth: permsW
             )
             let colsWidth = Self.totalColumnsWidth(
                 nameWidth: effectiveNameW,
-                sizeWidth: sizeWidth,
-                dateWidth: dateWidth,
-                kindWidth: kindWidth,
-                permsWidth: permsWidth
+                sizeWidth: sizeW,
+                dateWidth: dateW,
+                kindWidth: kindW,
+                permsWidth: permsW
             )
             let tableWidth = max(geo.size.width, colsWidth)
 
             if pane.displayedItems.isEmpty {
                 ScrollView(.horizontal, showsIndicators: colsWidth > geo.size.width) {
                     VStack(spacing: 0) {
-                        tableHeaderBar(tableWidth: tableWidth, nameColumnWidth: effectiveNameW)
+                        tableHeaderBar(tableWidth: tableWidth, nameColumnWidth: effectiveNameW, columns: columns)
 
                         VStack(spacing: 12) {
                             Spacer()
@@ -217,17 +245,19 @@ public struct FileListView: View {
             } else {
                 ScrollView([.horizontal, .vertical], showsIndicators: true) {
                     LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                        Section(header: tableHeaderBar(tableWidth: tableWidth, nameColumnWidth: effectiveNameW)) {
+                        Section(header: tableHeaderBar(tableWidth: tableWidth, nameColumnWidth: effectiveNameW, columns: columns)) {
                             ForEach(pane.displayedItems) { item in
                                 FileRowView(
                                     item: item,
                                     isSelected: pane.selectedItemURLs.contains(item.url),
                                     isFocused: pane.focusedItemURL == item.url,
                                     nameWidth: effectiveNameW,
-                                    sizeWidth: sizeWidth,
-                                    dateWidth: dateWidth,
-                                    kindWidth: kindWidth,
-                                    permsWidth: permsWidth,
+                                    sizeWidth: sizeW,
+                                    dateWidth: dateW,
+                                    kindWidth: kindW,
+                                    permsWidth: permsW,
+                                    fontSize: settings.fontSize,
+                                    relativeDates: settings.showRelativeDates,
                                     onActivate: onActivate,
                                     onSelect: { isShift, isCmd in
                                         onActivate()
@@ -487,6 +517,8 @@ public struct FileRowView: View {
     let dateWidth: Double
     let kindWidth: Double
     let permsWidth: Double
+    var fontSize: Double = 12
+    var relativeDates: Bool = false
     let onActivate: () -> Void
     let onSelect: (Bool, Bool) -> Void
     let onDoubleClick: () -> Void
@@ -505,7 +537,7 @@ public struct FileRowView: View {
                     .frame(width: 16, height: 16)
 
                 Text(item.name)
-                    .font(.system(size: 12))
+                    .font(.system(size: fontSize))
                     .foregroundColor(isSelected ? .white : (item.isHidden ? .secondary : .primary))
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -523,57 +555,60 @@ public struct FileRowView: View {
 
             Color.clear.frame(width: 5)
 
-            // Size
-            HStack {
-                Spacer(minLength: 0)
-                Text(item.formattedSize)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 6)
-            .frame(width: sizeWidth, alignment: .trailing)
-            .clipped()
+            let secondarySize = max(9, fontSize - 1)
+            let secondaryColor: Color = isSelected ? .white.opacity(0.9) : .secondary
 
-            Color.clear.frame(width: 5)
-
-            // Date
-            HStack {
-                Text(item.formattedDate)
-                    .font(.system(size: 11))
-                    .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 6)
-            .frame(width: dateWidth, alignment: .leading)
-            .clipped()
-
-            Color.clear.frame(width: 5)
-
-            // Kind
-            HStack {
-                Text(item.kindDescription)
-                    .font(.system(size: 11))
-                    .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 6)
-            .frame(width: kindWidth, alignment: .leading)
-            .clipped()
-
-            Color.clear.frame(width: 5)
-
-            // Permissions
-            Text(item.posixPermissions)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary.opacity(0.8))
-                .lineLimit(1)
-                .frame(width: permsWidth, alignment: .center)
+            if sizeWidth > 0 {
+                HStack {
+                    Spacer(minLength: 0)
+                    Text(item.formattedSize)
+                        .font(.system(size: secondarySize, design: .monospaced))
+                        .foregroundColor(secondaryColor)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 6)
+                .frame(width: sizeWidth, alignment: .trailing)
                 .clipped()
+                Color.clear.frame(width: 5)
+            }
 
-            Color.clear.frame(width: 5)
+            if dateWidth > 0 {
+                HStack {
+                    Text(item.formattedDate(relative: relativeDates))
+                        .font(.system(size: secondarySize))
+                        .foregroundColor(secondaryColor)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 6)
+                .frame(width: dateWidth, alignment: .leading)
+                .clipped()
+                Color.clear.frame(width: 5)
+            }
+
+            if kindWidth > 0 {
+                HStack {
+                    Text(item.kindDescription)
+                        .font(.system(size: secondarySize))
+                        .foregroundColor(secondaryColor)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 6)
+                .frame(width: kindWidth, alignment: .leading)
+                .clipped()
+                Color.clear.frame(width: 5)
+            }
+
+            if permsWidth > 0 {
+                Text(item.posixPermissions)
+                    .font(.system(size: max(9, fontSize - 2), design: .monospaced))
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary.opacity(0.8))
+                    .lineLimit(1)
+                    .frame(width: permsWidth, alignment: .center)
+                    .clipped()
+                Color.clear.frame(width: 5)
+            }
 
             Spacer(minLength: 0)
         }

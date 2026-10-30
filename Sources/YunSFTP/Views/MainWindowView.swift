@@ -888,7 +888,9 @@ public struct MainWindowView: View {
         if targetPane.isRemote {
             guard let conn = targetPane.remoteConnection else { return }
             // Remote deletion is permanent (no trash), so unlike the local path it needs confirmation.
-            guard Self.confirmRemoteDelete(itemNames: targets.map { $0.name }) else { return }
+            if SettingsStore.shared.settings.confirmRemoteDelete {
+                guard Self.confirmRemoteDelete(itemNames: targets.map { $0.name }) else { return }
+            }
             let pwd = targetPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
             Task {
                 var hadError = false

@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import UniformTypeIdentifiers
 
 public struct FileItem: Identifiable, Hashable, Sendable {
     public var id: URL { url }
@@ -74,7 +75,7 @@ public struct FileItem: Identifiable, Hashable, Sendable {
         self.modificationDate = modificationDate
         self.creationDate = nil
         self.fileExtension = (name as NSString).pathExtension.lowercased()
-        self.kindDescription = kind ?? (isDirectory ? "Remote Folder" : (isSymlink ? "Remote Symlink" : "Remote File"))
+        self.kindDescription = kind ?? FileItem.kindDescription(forRemoteName: name, isDirectory: isDirectory, isSymlink: isSymlink)
         self.posixPermissions = permissions
         self.isHidden = name.hasPrefix(".")
         self.symlinkTarget = nil
@@ -104,11 +105,41 @@ public struct FileItem: Identifiable, Hashable, Sendable {
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
 
-    public var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
-        return formatter.string(from: modificationDate)
+    /// Same vocabulary as Finder: remote items get the system type name for their extension.
+    public static func kindDescription(forRemoteName name: String, isDirectory: Bool, isSymlink: Bool) -> String {
+        if isSymlink { return "Alias" }
+        if isDirectory { return "Folder" }
+        let ext = (name as NSString).pathExtension
+        if !ext.isEmpty, let type = UTType(filenameExtension: ext), let desc = type.localizedDescription, !desc.isEmpty {
+            return desc
+        }
+        return ext.isEmpty ? "Document" : "\(ext.uppercased()) File"
+    }
+
+    private static let absoluteFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .short
+        f.timeStyle = .short
+        return f
+    }()
+
+    private static let relativeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        f.doesRelativeDateFormatting = true
+        return f
+    }()
+
+    public var formattedDate: String { formattedDate(relative: false) }
+
+    /// "Today at 6:43 PM" / "Yesterday at …" when `relative`, otherwise a short absolute date.
+    public func formattedDate(relative: Bool) -> String {
+        return FileItem.formatDate(modificationDate, relative: relative)
+    }
+
+    public static func formatDate(_ date: Date, relative: Bool) -> String {
+        return (relative ? relativeFormatter : absoluteFormatter).string(from: date)
     }
 
     public func hash(into hasher: inout Hasher) {

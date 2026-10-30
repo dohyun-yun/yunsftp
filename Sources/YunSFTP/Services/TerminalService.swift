@@ -20,13 +20,24 @@ public struct TerminalService {
         return error == nil
     }
 
-    static func appleScriptSource(for shellCommand: String) -> String {
-        return """
-        tell application "Terminal"
-            activate
-            do script \(escapeForAppleScript(shellCommand))
-        end tell
-        """
+    static func appleScriptSource(for shellCommand: String, app: TerminalApp = SettingsStore.preferredTerminal) -> String {
+        let quoted = escapeForAppleScript(shellCommand)
+        switch app {
+        case .terminal:
+            return """
+            tell application "Terminal"
+                activate
+                do script \(quoted)
+            end tell
+            """
+        case .iterm:
+            return """
+            tell application "iTerm"
+                activate
+                create window with default profile command \(quoted)
+            end tell
+            """
+        }
     }
 
     public static func revealInFinder(url: URL) {

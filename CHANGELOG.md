@@ -13,6 +13,10 @@ All notable changes to this project are documented here. The format follows
 - Require confirmation before deleting remote files; remove the shell `rm` fallback.
 - Create the `SSH_ASKPASS` helper atomically with mode `0700`.
 
+### Added
+- Per-connection "Allow legacy SSH algorithms" toggle (off by default) for devices that only offer SHA-1 key exchange / `ssh-rsa`.
+- CI workflow, SECURITY.md, CONTRIBUTING.md, issue and PR templates.
+
 ### Changed
 - Reuse SSH sessions through `ControlMaster` (faster navigation, single login per server).
 - User-facing strings are English only.

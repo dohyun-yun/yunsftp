@@ -202,6 +202,18 @@ public actor SFTPService {
     /// pay for a new handshake + authentication.
     static let controlPath: String = (NSTemporaryDirectory() as NSString).appendingPathComponent("ys-%C")
 
+    /// Appended only when the connection opts in. These re-enable algorithms OpenSSH disabled
+    /// for good reasons (SHA-1); use them only for devices that cannot be updated.
+    static let legacySSHOptions: [String] = [
+        "-o", "KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha256",
+        "-o", "HostkeyAlgorithms=+ssh-rsa",
+        "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa"
+    ]
+
+    static func sshOptions(for connection: RemoteConnection) -> [String] {
+        return connection.allowLegacyAlgorithms ? commonSSHOptions + legacySSHOptions : commonSSHOptions
+    }
+
     static var commonSSHOptions: [String] {
         return [
             "-o", "StrictHostKeyChecking=accept-new",
@@ -325,7 +337,7 @@ public actor SFTPService {
 
         // 3. Fallback to scp (quoting remoteSpec for remote shell execution)
         var args = ["-P", "\(connection.port)"]
-        args.append(contentsOf: Self.commonSSHOptions)
+        args.append(contentsOf: Self.sshOptions(for: connection))
 
         if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
             let expandedKey = (connection.keyFilePath as NSString).expandingTildeInPath
@@ -380,7 +392,7 @@ public actor SFTPService {
             } catch where !Self.isAuthenticationFailure(error) {
                 // 3. Fallback to scp (quoting remoteDest for remote shell execution)
                 var args = ["-P", "\(connection.port)"]
-                args.append(contentsOf: Self.commonSSHOptions)
+                args.append(contentsOf: Self.sshOptions(for: connection))
 
                 if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
                     let expandedKey = (connection.keyFilePath as NSString).expandingTildeInPath
@@ -619,7 +631,7 @@ public actor SFTPService {
     private func executeSSH(command: String, connection: RemoteConnection, password: String?) async throws -> String {
         let effectivePwd = resolvePassword(password: password, connection: connection)
         var args = ["-p", "\(connection.port)"]
-        args.append(contentsOf: Self.commonSSHOptions)
+        args.append(contentsOf: Self.sshOptions(for: connection))
 
         if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
             let expandedKey = (connection.keyFilePath as NSString).expandingTildeInPath
@@ -641,7 +653,7 @@ public actor SFTPService {
             args.append(contentsOf: ["-D", sftpServerPath, "-b", "-", "dummy"])
         } else {
             args.append(contentsOf: ["-P", "\(connection.port)"])
-            args.append(contentsOf: Self.commonSSHOptions)
+            args.append(contentsOf: Self.sshOptions(for: connection))
             args.append(contentsOf: ["-b", "-"])
 
             if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
@@ -798,6 +810,11 @@ public actor SFTPService {
         // 0. Host key mismatch (possible MITM or reinstalled server)
         if lower.contains("remote host identification has changed") || lower.contains("host key verification failed") {
             return "Host key verification failed: the server's key does not match the one saved in ~/.ssh/known_hosts. If the server was reinstalled, remove its entry with `ssh-keygen -R <host>`; otherwise the connection may be intercepted."
+        }
+
+        // 0b. Algorithm negotiation failure (old device)
+        if lower.contains("no matching key exchange method") || lower.contains("no matching host key type") || lower.contains("no matching cipher") {
+            return "The server only offers outdated SSH algorithms that OpenSSH disables by default. If you trust this device and cannot update it, enable \"Allow legacy SSH algorithms\" in the connection settings."
         }
 
         // 1. Connection-level errors

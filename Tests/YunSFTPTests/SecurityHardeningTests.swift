@@ -144,3 +144,35 @@ extension SecurityHardeningTests {
         XCTAssertFalse(FileManager.default.fileExists(atPath: "/tmp/x"))
     }
 }
+
+extension SecurityHardeningTests {
+
+    // MARK: - Item 21: legacy algorithms are per-connection opt-in
+
+    func testLegacyAlgorithmsAreOffByDefaultAndOptIn() {
+        let normal = RemoteConnection(name: "n", host: "h")
+        XCTAssertFalse(SFTPService.sshOptions(for: normal).joined(separator: " ").lowercased().contains("sha1"))
+
+        var legacy = normal
+        legacy.allowLegacyAlgorithms = true
+        let opts = SFTPService.sshOptions(for: legacy).joined(separator: " ")
+        XCTAssertTrue(opts.contains("diffie-hellman-group14-sha1"))
+        XCTAssertTrue(opts.contains("HostkeyAlgorithms=+ssh-rsa"))
+        XCTAssertTrue(opts.contains("StrictHostKeyChecking=accept-new"), "legacy mode must not weaken host key checks")
+    }
+
+    func testConnectionsSavedWithoutLegacyFlagStillDecode() throws {
+        let json = """
+        {"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","name":"Old","connectionProtocol":"SFTP (SSH File Transfer)","host":"h","port":22,"username":"u","remotePath":"/","authType":"Password","keyFilePath":"","isImportedFromForkLift2":false}
+        """
+        let conn = try JSONDecoder().decode(RemoteConnection.self, from: Data(json.utf8))
+        XCTAssertFalse(conn.allowLegacyAlgorithms)
+        let roundTrip = try JSONDecoder().decode(RemoteConnection.self, from: JSONEncoder().encode(conn))
+        XCTAssertEqual(roundTrip, conn)
+    }
+
+    func testAlgorithmNegotiationFailurePointsToLegacyToggle() {
+        let msg = SFTPService.translateErrorMessage("Unable to negotiate with 10.0.0.1 port 22: no matching key exchange method found. Their offer: diffie-hellman-group1-sha1", exitCode: 255)
+        XCTAssertTrue(msg.contains("Allow legacy SSH algorithms"))
+    }
+}

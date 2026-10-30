@@ -16,7 +16,9 @@ bundling its own SSH implementation.
 - Passwords are stored in the macOS Keychain and handed to OpenSSH through a one-shot
   `SSH_ASKPASS` helper created with mode `0700` in the per-user temporary directory and
   deleted after the process exits.
-- Cryptographic algorithms are left at the OpenSSH defaults; no legacy ciphers are enabled.
+- Cryptographic algorithms are left at the OpenSSH defaults. A per-connection "Allow legacy SSH
+  algorithms" toggle (off by default) re-enables SHA-1 key exchange and `ssh-rsa` for devices
+  that cannot be updated.
 - Remote deletion runs inside the SFTP subsystem only; the app never executes `rm` on the server.
 
 ## Supported versions

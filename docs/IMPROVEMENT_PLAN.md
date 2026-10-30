@@ -30,3 +30,5 @@ Status board for the hardening pass. One commit per item. Legend: `[ ]` todo, `[
 - [-] 18. Settings/Preferences window for `AppSettings` fields.
 - [-] 19. Passphrase-protected key support in-app (documented as ssh-agent requirement in item 11).
 - [-] 20. Host key fingerprint confirmation UI (item 1 uses trust-on-first-use via `accept-new`).
+- [x] 21. Per-connection "Allow legacy SSH algorithms" toggle (off by default) with an actionable error when negotiation fails.
+- [x] 22. Purge leaked personal host/port from git history (filter-repo, force-pushed main, branch and tag).

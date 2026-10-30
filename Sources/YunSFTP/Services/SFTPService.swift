@@ -58,52 +58,39 @@ public struct RemoteFileItem: Identifiable, Hashable, Sendable {
 public final class ProcessRegistry: @unchecked Sendable {
     public static let shared = ProcessRegistry()
     private let lock = NSLock()
-    private var processes: [ObjectIdentifier: (process: Process, isTransfer: Bool)] = [:]
+    private var processes: [ObjectIdentifier: (process: Process, isTransfer: Bool, batch: UUID?)] = [:]
     /// Processes we signalled. sftp/scp handle SIGTERM themselves and exit "normally", so the
     /// exit status alone cannot tell a cancel from a failure.
     private var terminated: Set<ObjectIdentifier> = []
 
     // Keyed by object identity so registering before run() is safe even if the child exits
     // (and the termination handler fires) immediately. `isTransfer` marks get/put/scp children;
-    // listings, renames and deletes are never killed by a transfer cancel.
-    func register(_ p: Process, isTransfer: Bool) { lock.lock(); processes[ObjectIdentifier(p)] = (p, isTransfer); lock.unlock() }
+    // listings, renames and deletes are never killed by a transfer cancel. `batch` is the
+    // transfer batch that spawned the child (task-local), so cancels stay within their batch.
+    func register(_ p: Process, isTransfer: Bool, batch: UUID? = nil) { lock.lock(); processes[ObjectIdentifier(p)] = (p, isTransfer, batch); lock.unlock() }
     func unregister(_ p: Process) { lock.lock(); processes.removeValue(forKey: ObjectIdentifier(p)); lock.unlock() }
 
-    /// True once per process if `terminateAll()` signalled it. Delivering the cancel to a running
-    /// transfer also clears the pending flag, so it cannot leak into a later transfer.
+    /// True once per process if the registry signalled it.
     func consumeTerminated(_ p: Process) -> Bool {
         lock.lock(); defer { lock.unlock() }
-        let hit = terminated.remove(ObjectIdentifier(p)) != nil
-        if hit { pendingCancelAt = nil }
-        return hit
+        return terminated.remove(ObjectIdentifier(p)) != nil
     }
 
-    /// Set by `requestCancel()`. A transfer process that starts while it is pending (the cancel
-    /// arrived during name probing / askpass setup) aborts before it runs.
-    private var pendingCancelAt: Date?
-    private let pendingCancelTTL: TimeInterval = 15
-
-    public func requestCancel() {
-        lock.lock(); pendingCancelAt = Date(); lock.unlock()
-        terminateAll()
-    }
-
-    public func clearPendingCancel() { lock.lock(); pendingCancelAt = nil; lock.unlock() }
-
-    func consumePendingCancel() -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        guard let at = pendingCancelAt else { return false }
-        pendingCancelAt = nil
-        // ponytail: TTL guards against a cancel nobody consumed (single download, last batch item);
-        // per-batch tokens would make this exact.
-        return Date().timeIntervalSince(at) < pendingCancelTTL
+    /// Sends SIGTERM to the running transfer children of one batch. Returns how many were signalled.
+    @discardableResult
+    public func terminate(batch: UUID) -> Int {
+        return terminateRunning { $0.isTransfer && $0.batch == batch }
     }
 
     /// Sends SIGTERM to every running transfer child. Returns how many were signalled.
     @discardableResult
     public func terminateAll() -> Int {
+        return terminateRunning { $0.isTransfer }
+    }
+
+    private func terminateRunning(where matches: ((process: Process, isTransfer: Bool, batch: UUID?)) -> Bool) -> Int {
         lock.lock()
-        let running = processes.values.filter { $0.isTransfer && $0.process.isRunning }.map { $0.process }
+        let running = processes.values.filter { matches($0) && $0.process.isRunning }.map { $0.process }
         running.forEach { terminated.insert(ObjectIdentifier($0)) }
         lock.unlock()
         running.forEach { $0.terminate() }
@@ -113,6 +100,9 @@ public final class ProcessRegistry: @unchecked Sendable {
 
 public actor SFTPService {
     public static let shared = SFTPService()
+
+    /// Transfer batch that owns the current task tree; set by `TransferCoordinator`.
+    @TaskLocal public static var currentBatch: UUID?
 
     /// Normalizes a remote path: decodes escapes, converts to NFC, collapses multiple slashes, and strips trailing slash
     public static func normalizeRemotePath(_ path: String) -> String {
@@ -799,10 +789,12 @@ public actor SFTPService {
                     }
                 }
                 do {
-                    if isTransfer && ProcessRegistry.shared.consumePendingCancel() {
+                    // A cancel that arrived while this batch was between processes (probing names,
+                    // writing the askpass helper) must stop the next child before it starts.
+                    if isTransfer && Task.isCancelled {
                         throw NSError(domain: "SFTPService", code: Self.cancellationCode, userInfo: [NSLocalizedDescriptionKey: "Transfer cancelled."])
                     }
-                    ProcessRegistry.shared.register(process, isTransfer: isTransfer)
+                    ProcessRegistry.shared.register(process, isTransfer: isTransfer, batch: Self.currentBatch)
                     try process.run()
                     if let input = inputData {
                         stdinPipe.fileHandleForWriting.write(input)

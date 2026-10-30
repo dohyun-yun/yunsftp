@@ -54,9 +54,9 @@ Legend as above. Order = execution order.
 
 ## B. Transfers and file operations
 
-- [ ] 33. Conflict dialog: Replace / Skip / Keep both / Apply to all for local and SFTP transfers.
+- [x] 33. Conflict dialog: Replace / Skip / Keep both / Apply to all for local and SFTP transfers.
 - [ ] 34. Transfer window: queue list, per-item cancel, retry failed, history; batch-scoped cancel tokens replace the global cancel.
-- [ ] 35. Shared transfer coordinator replacing the nine near-identical copy/move/drop/paste loops.
+- [x] 35. Shared transfer coordinator replacing the nine near-identical copy/move/drop/paste loops.
 - [ ] 36. Edit remote file in external editor with auto-upload on save (FSEvents watch).
 - [ ] 37. Undo for local rename / move / trash.
 - [ ] 38. Remote path bookmarks and recent locations per connection.

@@ -502,20 +502,12 @@ public struct MainWindowView: View {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("yunsftpPreview", isDirectory: true)
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let remotePath = SFTPService.normalizeRemotePath(item.url.path)
-        let taskId = TransferManager.shared.addTransfer(fileName: item.name, direction: .download, totalBytes: item.size)
-        TransferManager.shared.updateProgress(id: taskId, progress: 0.2, bytesTransferred: 0, totalBytes: item.size, message: "Downloading \(item.name)...")
-
-        Task {
-            do {
-                let localURL = try await SFTPService.shared.download(remotePath: remotePath, to: tempDir, connection: conn, password: pwd, overwrite: true)
-                TransferManager.shared.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Done")
-                TransferManager.shared.markCompleted(id: taskId)
-                await MainActor.run {
-                    TerminalService.openItem(url: localURL)
-                }
-            } catch {
-                TransferManager.shared.markFailed(id: taskId, error: error.localizedDescription)
-            }
+        let size = item.size
+        let name = item.name
+        TransferCoordinator.shared.runAdHoc(fileName: name, direction: .download, totalBytes: size) { taskID in
+            await TransferManager.shared.updateProgress(id: taskID, progress: 0.2, bytesTransferred: 0, totalBytes: size, message: "Downloading \(name)...")
+            let localURL = try await SFTPService.shared.download(remotePath: remotePath, to: tempDir, connection: conn, password: pwd, overwrite: true)
+            await MainActor.run { TerminalService.openItem(url: localURL) }
         }
     }
 
@@ -534,343 +526,23 @@ public struct MainWindowView: View {
     }
 
     private func copySelectedToOtherPane() {
-        guard isDualPane else { return }
-        let selected = activePane.effectiveSelectedItems
-        guard !selected.isEmpty else { return }
-
-        let transferManager = TransferManager.shared
-
-        // Case 1: Active is Remote, Other is Local -> SFTP Download
-        if activePane.isRemote && !otherPane.isRemote {
-            guard let conn = activePane.remoteConnection else { return }
-            let pwd = activePane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
-            let dest = otherPane.currentURL
-            Task {
-                let batchStart = TransferManager.shared.beginBatch()
-                for item in selected {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                    let cleanFileName = SFTPService.decodeLsEscapes(item.name).precomposedStringWithCanonicalMapping
-                    let remotePath = SFTPService.normalizeRemotePath(item.url.path)
-                    let destFileURL = FileSystemService.plannedDestinationURL(fileName: cleanFileName, in: dest)
-
-                    let taskId = transferManager.addTransfer(fileName: cleanFileName, direction: .download, totalBytes: item.size)
-
-                    let monitor = Task {
-                        while !Task.isCancelled {
-                            try? await Task.sleep(nanoseconds: 150_000_000)
-                            guard !Task.isCancelled else { break }
-                            if let attrs = try? FileManager.default.attributesOfItem(atPath: destFileURL.path),
-                               let currentBytes = attrs[.size] as? Int64 {
-                                guard !Task.isCancelled else { break }
-                                let progress = item.size > 0 ? min(0.98, max(0.01, Double(currentBytes) / Double(item.size))) : 0.5
-                                await MainActor.run {
-                                    guard !Task.isCancelled else { return }
-                                    transferManager.updateProgress(
-                                        id: taskId,
-                                        progress: progress,
-                                        bytesTransferred: currentBytes,
-                                        totalBytes: item.size,
-                                        message: "Downloading \(cleanFileName)..."
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    do {
-                        _ = try await SFTPService.shared.download(remotePath: remotePath, to: dest, connection: conn, password: pwd)
-                        monitor.cancel()
-                        await MainActor.run {
-                            transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Downloaded \(cleanFileName)")
-                            transferManager.markCompleted(id: taskId)
-                        }
-                    } catch {
-                        monitor.cancel()
-                        await MainActor.run {
-                            transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                        }
-                    }
-                }
-                await MainActor.run {
-                    otherPane.reload()
-                }
-            }
-            return
-        }
-
-        // Case 2: Active is Local, Other is Remote -> SFTP Upload
-        if !activePane.isRemote && otherPane.isRemote {
-            guard let conn = otherPane.remoteConnection else { return }
-            let pwd = otherPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
-            let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
-            Task {
-                let batchStart = TransferManager.shared.beginBatch()
-                for item in selected {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                    let taskId = transferManager.addTransfer(fileName: item.name, direction: .upload, totalBytes: item.size)
-                    await MainActor.run {
-                        transferManager.updateProgress(id: taskId, progress: 0.1, bytesTransferred: 0, totalBytes: item.size, message: "Uploading \(item.name)...")
-                    }
-                    do {
-                        try await SFTPService.shared.upload(localURL: item.url, to: destPath, connection: conn, password: pwd)
-                        await MainActor.run {
-                            transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Uploaded \(item.name)")
-                            transferManager.markCompleted(id: taskId)
-                        }
-                    } catch {
-                        await MainActor.run {
-                            transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                        }
-                    }
-                }
-                otherPane.reload()
-            }
-            return
-        }
-
-        // Case 3: Remote to Remote
-        if activePane.isRemote && otherPane.isRemote {
-            guard let srcConn = activePane.remoteConnection, let dstConn = otherPane.remoteConnection else { return }
-            let srcPwd = activePane.remotePassword ?? (srcConn.authType == .password ? KeychainService.shared.loadPassword(for: srcConn) : nil)
-            let dstPwd = otherPane.remotePassword ?? (dstConn.authType == .password ? KeychainService.shared.loadPassword(for: dstConn) : nil)
-            let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
-            Task {
-                let batchStart = TransferManager.shared.beginBatch()
-                for item in selected {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                    let taskId = transferManager.addTransfer(fileName: item.name, direction: .remoteCopy, totalBytes: item.size)
-                    let remoteSrc = SFTPService.normalizeRemotePath(item.url.path)
-                    await MainActor.run {
-                        transferManager.updateProgress(id: taskId, progress: 0.1, bytesTransferred: 0, totalBytes: item.size, message: "Transferring \(item.name)...")
-                    }
-                    do {
-                        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("yunsftpTransfer_\(UUID().uuidString)")
-                        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-                        let downloaded = try await SFTPService.shared.download(remotePath: remoteSrc, to: tempDir, connection: srcConn, password: srcPwd)
-                        try await SFTPService.shared.upload(localURL: downloaded, to: destPath, connection: dstConn, password: dstPwd)
-                        try? FileManager.default.removeItem(at: tempDir)
-                        await MainActor.run {
-                            transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Transferred \(item.name)")
-                            transferManager.markCompleted(id: taskId)
-                        }
-                    } catch {
-                        await MainActor.run {
-                            transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                        }
-                    }
-                }
-                otherPane.reload()
-            }
-            return
-        }
-
-        // Case 4: Local to Local
-        let dest = otherPane.currentURL
-
-        Task {
-            let batchStart = TransferManager.shared.beginBatch()
-            for item in selected {
-                if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                let taskId = transferManager.addTransfer(fileName: item.name, direction: .localCopy, totalBytes: item.size)
-                let destFileURL = FileSystemService.plannedDestinationURL(fileName: item.name, in: dest)
-
-                let monitor = Task {
-                    while !Task.isCancelled {
-                        try? await Task.sleep(nanoseconds: 100_000_000)
-                        guard !Task.isCancelled else { break }
-                        if let attrs = try? FileManager.default.attributesOfItem(atPath: destFileURL.path),
-                           let currentBytes = attrs[.size] as? Int64 {
-                            guard !Task.isCancelled else { break }
-                            let progress = item.size > 0 ? min(0.98, max(0.05, Double(currentBytes) / Double(item.size))) : 0.5
-                            await MainActor.run {
-                                guard !Task.isCancelled else { return }
-                                transferManager.updateProgress(
-                                    id: taskId,
-                                    progress: progress,
-                                    bytesTransferred: currentBytes,
-                                    totalBytes: item.size,
-                                    message: "Copying \(item.name)..."
-                                )
-                            }
-                        }
-                    }
-                }
-
-                do {
-                    try await FileSystemService.shared.copy(urls: [item.url], to: dest)
-                    monitor.cancel()
-                    await MainActor.run {
-                        transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Copied \(item.name)")
-                        transferManager.markCompleted(id: taskId)
-                    }
-                } catch {
-                    monitor.cancel()
-                    await MainActor.run {
-                        transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                    }
-                }
-            }
-            otherPane.reload()
-        }
+        transferSelection(mode: .copy)
     }
 
     private func moveSelectedToOtherPane() {
+        transferSelection(mode: .move)
+    }
+
+    private func transferSelection(mode: TransferMode) {
         guard isDualPane else { return }
         let selected = activePane.effectiveSelectedItems
-        guard !selected.isEmpty else { return }
-
-        let transferManager = TransferManager.shared
-
-        // Case 1: Active Remote -> Download and Remove
-        if activePane.isRemote && !otherPane.isRemote {
-            guard let conn = activePane.remoteConnection else { return }
-            let pwd = activePane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
-            let dest = otherPane.currentURL
-            Task {
-                let batchStart = TransferManager.shared.beginBatch()
-                for item in selected {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                    let taskId = transferManager.addTransfer(fileName: item.name, direction: .download, totalBytes: item.size)
-                    let remotePath = SFTPService.normalizeRemotePath(item.url.path)
-                    let destFileURL = FileSystemService.plannedDestinationURL(fileName: item.name, in: dest)
-
-                    let monitor = Task {
-                        while !Task.isCancelled {
-                            try? await Task.sleep(nanoseconds: 150_000_000)
-                            guard !Task.isCancelled else { break }
-                            if let attrs = try? FileManager.default.attributesOfItem(atPath: destFileURL.path),
-                               let currentBytes = attrs[.size] as? Int64 {
-                                guard !Task.isCancelled else { break }
-                                let progress = item.size > 0 ? min(0.98, max(0.01, Double(currentBytes) / Double(item.size))) : 0.5
-                                await MainActor.run {
-                                    guard !Task.isCancelled else { return }
-                                    transferManager.updateProgress(
-                                        id: taskId,
-                                        progress: progress,
-                                        bytesTransferred: currentBytes,
-                                        totalBytes: item.size,
-                                        message: "Moving \(item.name)..."
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    do {
-                        _ = try await SFTPService.shared.download(remotePath: remotePath, to: dest, connection: conn, password: pwd)
-                        monitor.cancel()
-                        try await SFTPService.shared.remove(remotePath: remotePath, isDirectory: item.isDirectory, connection: conn, password: pwd)
-                        await MainActor.run {
-                            transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Moved \(item.name)")
-                            transferManager.markCompleted(id: taskId)
-                        }
-                    } catch {
-                        monitor.cancel()
-                        await MainActor.run {
-                            transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                        }
-                    }
-                }
-                activePane.reload()
-                otherPane.reload()
-            }
-            return
-        }
-
-        // Case 2: Active Local -> Upload and Move to Trash
-        if !activePane.isRemote && otherPane.isRemote {
-            guard let conn = otherPane.remoteConnection else { return }
-            let pwd = otherPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
-            let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
-            Task {
-                let batchStart = TransferManager.shared.beginBatch()
-                for item in selected {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                    let taskId = transferManager.addTransfer(fileName: item.name, direction: .upload, totalBytes: item.size)
-                    await MainActor.run {
-                        transferManager.updateProgress(id: taskId, progress: 0.1, bytesTransferred: 0, totalBytes: item.size, message: "Moving \(item.name)...")
-                    }
-                    do {
-                        try await SFTPService.shared.upload(localURL: item.url, to: destPath, connection: conn, password: pwd)
-                        try await FileSystemService.shared.moveToTrash(urls: [item.url])
-                        await MainActor.run {
-                            transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Moved \(item.name)")
-                            transferManager.markCompleted(id: taskId)
-                        }
-                    } catch {
-                        await MainActor.run {
-                            transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                        }
-                    }
-                }
-                activePane.reload()
-                otherPane.reload()
-            }
-            return
-        }
-
-        // Case 3: Remote to Remote Move
-        if activePane.isRemote && otherPane.isRemote {
-            guard let srcConn = activePane.remoteConnection, let dstConn = otherPane.remoteConnection else { return }
-            let srcPwd = activePane.remotePassword ?? (srcConn.authType == .password ? KeychainService.shared.loadPassword(for: srcConn) : nil)
-            let dstPwd = otherPane.remotePassword ?? (dstConn.authType == .password ? KeychainService.shared.loadPassword(for: dstConn) : nil)
-            let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
-            Task {
-                let batchStart = TransferManager.shared.beginBatch()
-                for item in selected {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                    let taskId = transferManager.addTransfer(fileName: item.name, direction: .remoteCopy, totalBytes: item.size)
-                    let remoteSrc = SFTPService.normalizeRemotePath(item.url.path)
-                    await MainActor.run {
-                        transferManager.updateProgress(id: taskId, progress: 0.1, bytesTransferred: 0, totalBytes: item.size, message: "Moving \(item.name)...")
-                    }
-                    do {
-                        if srcConn.id == dstConn.id {
-                            let newDst = (destPath == "/" ? "/\(item.name)" : "\(destPath)/\(item.name)").precomposedStringWithCanonicalMapping
-                            try await SFTPService.shared.rename(remotePath: remoteSrc, to: newDst, connection: dstConn, password: dstPwd)
-                        } else {
-                            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("yunsftpTransfer_\(UUID().uuidString)")
-                            try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-                            let downloaded = try await SFTPService.shared.download(remotePath: remoteSrc, to: tempDir, connection: srcConn, password: srcPwd)
-                            try await SFTPService.shared.upload(localURL: downloaded, to: destPath, connection: dstConn, password: dstPwd)
-                            try? FileManager.default.removeItem(at: tempDir)
-                            try await SFTPService.shared.remove(remotePath: remoteSrc, isDirectory: item.isDirectory, connection: srcConn, password: srcPwd)
-                        }
-                        await MainActor.run {
-                            transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Moved \(item.name)")
-                            transferManager.markCompleted(id: taskId)
-                        }
-                    } catch {
-                        await MainActor.run {
-                            transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                        }
-                    }
-                }
-                activePane.reload()
-                otherPane.reload()
-            }
-            return
-        }
-
-        // Case 4: Local to Local Move
-        let dest = otherPane.currentURL
-
-        Task {
-            let batchStart = TransferManager.shared.beginBatch()
-            for item in selected {
-                if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
-                let taskId = transferManager.addTransfer(fileName: item.name, direction: .localMove, totalBytes: item.size)
-                transferManager.updateProgress(id: taskId, progress: 0.5, bytesTransferred: 0, totalBytes: item.size, message: "Moving \(item.name)...")
-                do {
-                    try await FileSystemService.shared.move(urls: [item.url], to: dest)
-                    transferManager.updateProgress(id: taskId, progress: 1.0, bytesTransferred: item.size, totalBytes: item.size, message: "Done")
-                    transferManager.markCompleted(id: taskId)
-                } catch {
-                    transferManager.markFailed(id: taskId, error: error.localizedDescription)
-                }
-            }
-            activePane.reload()
-            otherPane.reload()
+        guard !selected.isEmpty,
+              let source = TransferLocation.from(pane: activePane),
+              let destination = TransferLocation.from(pane: otherPane) else { return }
+        let src = activePane, dst = otherPane
+        TransferCoordinator.shared.start(TransferRequest(items: selected, source: source, destination: destination, mode: mode)) {
+            if mode == .move { src.reload() }
+            dst.reload()
         }
     }
 
@@ -907,9 +579,7 @@ public struct MainWindowView: View {
             let pwd = targetPane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
             Task {
                 var hadError = false
-                let batchStart = TransferManager.shared.beginBatch()
                 for item in targets {
-                    if TransferManager.shared.consumeCancelRequest(since: batchStart) { break }
                     let remotePath = SFTPService.normalizeRemotePath(item.url.path)
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .remoteCopy, totalBytes: item.size)
                     await MainActor.run {

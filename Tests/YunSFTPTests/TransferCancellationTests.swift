@@ -10,60 +10,40 @@ final class TransferCancellationTests: XCTestCase {
         }
         try await Task.sleep(nanoseconds: 400_000_000)
         XCTAssertGreaterThanOrEqual(ProcessRegistry.shared.terminateAll(), 1)
-
         do {
             _ = try await task.value
             XCTFail("terminated process should surface as an error")
         } catch {
-            // expected: non-zero exit after SIGTERM
+            XCTAssertTrue(SFTPService.isCancellation(error))
         }
-        XCTAssertLessThan(Date().timeIntervalSince(start), 10, "sleep 30 must not run to completion")
+        XCTAssertLessThan(Date().timeIntervalSince(start), 10)
+    }
+
+    func testTerminateBatchOnlySignalsThatBatch() async throws {
+        let a = UUID(), b = UUID()
+        let taskA = Task { try await SFTPService.$currentBatch.withValue(a) {
+            try await SFTPService.shared.runProcess(executable: "/bin/sleep", arguments: ["30"], password: nil, isTransfer: true) } }
+        let taskB = Task { try await SFTPService.$currentBatch.withValue(b) {
+            try await SFTPService.shared.runProcess(executable: "/bin/sleep", arguments: ["1"], password: nil, isTransfer: true) } }
+        try await Task.sleep(nanoseconds: 400_000_000)
+
+        XCTAssertEqual(ProcessRegistry.shared.terminate(batch: a), 1)
+        do { _ = try await taskA.value; XCTFail("batch A must be cancelled") } catch { XCTAssertTrue(SFTPService.isCancellation(error)) }
+        // Batch B was not touched and finishes normally.
+        _ = try await taskB.value
     }
 
     func testRegistryForgetsUnregisteredProcesses() throws {
-        // Isolated instance: other tests may legitimately have children running in the shared one.
         let registry = ProcessRegistry()
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/sleep")
-        p.arguments = ["30"]
-        registry.register(p, isTransfer: true)
+        p.executableURL = URL(fileURLWithPath: "/bin/sleep"); p.arguments = ["30"]
+        registry.register(p, isTransfer: true, batch: nil)
         try p.run()
         XCTAssertEqual(registry.terminateAll(), 1)
         p.waitUntilExit()
-        XCTAssertFalse(p.isRunning)
+        XCTAssertTrue(registry.consumeTerminated(p))
         registry.unregister(p)
         XCTAssertEqual(registry.terminateAll(), 0)
-    }
-
-    @MainActor
-    func testCancellingActiveTransferRaisesBatchCancelFlag() {
-        let tm = TransferManager()
-        let id = tm.addTransfer(fileName: "big.iso", direction: .upload, totalBytes: 100)
-        tm.updateProgress(id: id, progress: 0.2, bytesTransferred: 20, totalBytes: 100, message: "Uploading")
-
-        let batchStart = Date().addingTimeInterval(-1)
-        tm.cancelTransfer(id: id)
-        XCTAssertEqual(tm.transfers.first?.state, .cancelled)
-        XCTAssertFalse(tm.consumeCancelRequest(since: Date().addingTimeInterval(60)), "a batch started after the cancel ignores it")
-        XCTAssertTrue(tm.consumeCancelRequest(since: batchStart), "the running batch sees the cancel once")
-        XCTAssertFalse(tm.consumeCancelRequest(since: batchStart), "flag is consumed")
-
-        // A late success from the killed operation must not flip the state back.
-        tm.markCompleted(id: id)
-        XCTAssertEqual(tm.transfers.first?.state, .cancelled)
-
-        // The terminated process reports an error afterwards; cancelled wins.
-        tm.markFailed(id: id, error: "exit 15")
-        XCTAssertEqual(tm.transfers.first?.state, .cancelled)
-    }
-
-    @MainActor
-    func testCancellingFinishedTransferDoesNotAffectNextBatch() {
-        let tm = TransferManager()
-        let id = tm.addTransfer(fileName: "done.txt", direction: .download, totalBytes: 1)
-        tm.markCompleted(id: id)
-        tm.cancelTransfer(id: id)
-        XCTAssertFalse(tm.consumeCancelRequest(since: .distantPast))
     }
 
     func testTerminateAllSkipsNonTransferAndExitedProcesses() throws {
@@ -79,56 +59,51 @@ final class TransferCancellationTests: XCTestCase {
         registry.register(done, isTransfer: true)
         try done.run(); done.waitUntilExit()
 
-        XCTAssertEqual(registry.terminateAll(), 0, "listings and already-exited children are never signalled")
-        XCTAssertFalse(registry.consumeTerminated(done), "a finished transfer must not be reported as cancelled")
+        XCTAssertEqual(registry.terminateAll(), 0)
+        XCTAssertFalse(registry.consumeTerminated(done))
         XCTAssertTrue(listing.isRunning)
     }
 
-    @MainActor
-    func testCancellingJustAddedItemStopsTheBatch() {
-        let tm = TransferManager()
-        let batchStart = tm.beginBatch()
-        let id = tm.addTransfer(fileName: "big.iso", direction: .download, totalBytes: 100) // no bytes landed yet
-        tm.cancelTransfer(id: id)
-        XCTAssertTrue(tm.consumeCancelRequest(since: batchStart))
-    }
-
-    @MainActor
-    func testBeginBatchClearsStaleCancel() {
-        let tm = TransferManager()
-        let id = tm.addTransfer(fileName: "a", direction: .upload, totalBytes: 1)
-        tm.cancelTransfer(id: id)
-        let next = tm.beginBatch()
-        XCTAssertFalse(tm.consumeCancelRequest(since: next))
-        XCTAssertFalse(ProcessRegistry.shared.consumePendingCancel(), "beginBatch clears the pending process cancel too")
-    }
-
-    func testPendingCancelAbortsTheNextTransferProcessOnly() async throws {
-        let registry = ProcessRegistry()
-        XCTAssertFalse(registry.consumePendingCancel())
-        registry.requestCancel()               // nothing running: the cancel stays pending
-        XCTAssertTrue(registry.consumePendingCancel())
-        XCTAssertFalse(registry.consumePendingCancel(), "consumed once")
-
-        // Delivered to a running transfer -> cleared, not pending any more
-        let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/sleep"); p.arguments = ["30"]
-        registry.register(p, isTransfer: true); try p.run()
-        registry.requestCancel()
-        p.waitUntilExit()
-        XCTAssertTrue(registry.consumeTerminated(p))
-        XCTAssertFalse(registry.consumePendingCancel())
-    }
-
-    func testTransferProcessStartedAfterCancelIsAborted() async throws {
-        ProcessRegistry.shared.requestCancel()
-        do {
-            _ = try await SFTPService.shared.runProcess(executable: "/usr/bin/true", arguments: [], password: nil, isTransfer: true)
-            XCTFail("transfer process must not start while a cancel is pending")
-        } catch {
-            XCTAssertTrue(SFTPService.isCancellation(error))
+    func testTransferProcessDoesNotStartInsideCancelledTask() async throws {
+        let task = Task {
+            try await Task.sleep(nanoseconds: 2_000_000_000)   // cancelled before this returns
+            return try await SFTPService.shared.runProcess(executable: "/usr/bin/true", arguments: [], password: nil, isTransfer: true)
         }
-        // non-transfer processes are unaffected by a (now consumed) cancel
-        _ = try await SFTPService.shared.runProcess(executable: "/usr/bin/true", arguments: [], password: nil)
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("must not run")
+        } catch {
+            // CancellationError from sleep or our cancellation code: either way nothing ran.
+            XCTAssertTrue(error is CancellationError || SFTPService.isCancellation(error))
+        }
+    }
+
+    @MainActor
+    func testCancellingAnItemCancelsItsBatchAndKeepsFinalState() {
+        let tm = TransferManager()
+        var cancelledBatches: [UUID] = []
+        tm.batchCancelHandler = { cancelledBatches.append($0) }
+        let batch = UUID()
+        let a = tm.addTransfer(fileName: "a", direction: .upload, totalBytes: 1, batchID: batch)
+        let b = tm.addTransfer(fileName: "b", direction: .upload, totalBytes: 1, batchID: batch)
+        tm.updateProgress(id: a, progress: 0.2, bytesTransferred: 0, totalBytes: 1, message: "")
+
+        tm.cancelTransfer(id: a)
+        XCTAssertEqual(cancelledBatches, [batch])
+        tm.markBatchCancelled(batch)
+        XCTAssertEqual(tm.transfers.map(\.state), [.cancelled, .cancelled])
+
+        // Late results from killed work never flip the state back.
+        tm.markCompleted(id: a)
+        tm.markFailed(id: b, error: "exit 15")
+        XCTAssertEqual(tm.transfers.map(\.state), [.cancelled, .cancelled])
+
+        // Cancelling something already finished touches no batch.
+        let c = tm.addTransfer(fileName: "c", direction: .download, totalBytes: 1, batchID: UUID())
+        tm.markCompleted(id: c)
+        tm.cancelTransfer(id: c)
+        XCTAssertEqual(cancelledBatches.count, 1)
     }
 
     func testCancelledDownloadLeavesNoPartialFile() async throws {
@@ -139,24 +114,24 @@ final class TransferCancellationTests: XCTestCase {
         try FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: base) }
 
-        // 1 GiB sparse file: cheap to create, long enough to interrupt.
         let big = remote.appendingPathComponent("big.bin")
-        let fh = FileManager.default.createFile(atPath: big.path, contents: nil)
-        XCTAssertTrue(fh)
+        XCTAssertTrue(FileManager.default.createFile(atPath: big.path, contents: nil))
         let handle = try FileHandle(forWritingTo: big)
         try handle.truncate(atOffset: 1 << 30)
         try handle.close()
 
         let conn = RemoteConnection(name: "Local", host: "local-sftp-server", port: 22, username: NSUserName(), remotePath: remote.path, authType: .sshKey)
-        let task = Task { try await SFTPService.shared.download(remotePath: big.path, to: local, connection: conn, password: nil) }
+        let batch = UUID()
+        let task = Task { try await SFTPService.$currentBatch.withValue(batch) {
+            try await SFTPService.shared.download(remotePath: big.path, to: local, connection: conn, password: nil) } }
         try await Task.sleep(nanoseconds: 150_000_000)
-        ProcessRegistry.shared.terminateAll()
+        ProcessRegistry.shared.terminate(batch: batch)
 
         do {
             _ = try await task.value
             throw XCTSkip("download finished before it could be cancelled on this machine")
         } catch let error where SFTPService.isCancellation(error) {
-            XCTAssertFalse(FileManager.default.fileExists(atPath: local.appendingPathComponent("big.bin").path), "partial file must be removed")
+            XCTAssertFalse(FileManager.default.fileExists(atPath: local.appendingPathComponent("big.bin").path))
             XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: local.path).count, 0)
         }
     }

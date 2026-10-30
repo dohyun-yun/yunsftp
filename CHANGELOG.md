@@ -7,7 +7,14 @@ All notable changes to this project are documented here. The format follows
 
 _Nothing yet._
 
-## [1.1.0] - 2026-10-30
+## [1.1.1] - 2026-10-30
+
+### Fixed
+- The 1.1.0 release build crashed at launch: the toolchain-generated resource-bundle accessor did not look in `Contents/Resources`. The app now locates its localization bundle itself and falls back to English instead of trapping. CI and the release workflow launch the packaged app once as a smoke test.
+
+## [1.1.0] - 2026-10-30 [YANKED]
+
+_Crashed at launch when built by CI; replaced by 1.1.1._
 
 ### Security
 - Verify SSH host keys against `~/.ssh/known_hosts` (`accept-new`) instead of disabling checks.
@@ -55,6 +62,6 @@ _Nothing yet._
 ## [1.0.0] - 2026-10-19
 - Initial public release.
 
-[Unreleased]: https://github.com/dohyun-yun/yunsftp/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/dohyun-yun/yunsftp/compare/v1.0.0...v1.1.0
+[Unreleased]: https://github.com/dohyun-yun/yunsftp/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/dohyun-yun/yunsftp/compare/v1.0.0...v1.1.1
 [1.0.0]: https://github.com/dohyun-yun/yunsftp/releases/tag/v1.0.0

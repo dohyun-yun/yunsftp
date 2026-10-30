@@ -16,3 +16,11 @@ jobs:
         run: swift build
       - name: Test
         run: swift test
+      - name: Build app bundle
+        run: ./scripts/build_app.sh
+      - name: Smoke-launch the app bundle
+        # Demo mode opens the main window, renders a screenshot and exits 0; a launch crash
+        # (missing resource bundle, bad scene order, …) fails here instead of on users' Macs.
+        run: |
+          perl -e 'alarm shift; exec @ARGV' 60 build/yunsftp.app/Contents/MacOS/yunsftp --demo-screenshot "$RUNNER_TEMP/smoke.png" --appearance light -AppleLocale en_US -AppleLanguages "(en)"
+          test -s "$RUNNER_TEMP/smoke.png"

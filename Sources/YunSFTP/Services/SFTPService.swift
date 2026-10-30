@@ -54,6 +54,28 @@ public struct RemoteFileItem: Identifiable, Hashable, Sendable {
     }
 }
 
+/// Tracks the ssh/sftp/scp child processes currently running so a user cancel can stop them.
+public final class ProcessRegistry: @unchecked Sendable {
+    public static let shared = ProcessRegistry()
+    private let lock = NSLock()
+    private var processes: [ObjectIdentifier: Process] = [:]
+
+    // Keyed by object identity so registering before run() is safe even if the child exits
+    // (and the termination handler fires) immediately.
+    func register(_ p: Process) { lock.lock(); processes[ObjectIdentifier(p)] = p; lock.unlock() }
+    func unregister(_ p: Process) { lock.lock(); processes.removeValue(forKey: ObjectIdentifier(p)); lock.unlock() }
+
+    /// Sends SIGTERM to every running child. Returns how many were signalled.
+    @discardableResult
+    public func terminateAll() -> Int {
+        lock.lock()
+        let running = Array(processes.values)
+        lock.unlock()
+        running.forEach { if $0.isRunning { $0.terminate() } }
+        return running.count
+    }
+}
+
 public actor SFTPService {
     public static let shared = SFTPService()
 
@@ -620,7 +642,7 @@ public actor SFTPService {
         return url
     }
 
-    private func runProcess(executable: String, arguments: [String], inputData: Data? = nil, password: String?) async throws -> String {
+    func runProcess(executable: String, arguments: [String], inputData: Data? = nil, password: String?) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
@@ -666,7 +688,8 @@ public actor SFTPService {
 
         do {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                process.terminationHandler = { _ in
+                process.terminationHandler = { p in
+                    ProcessRegistry.shared.unregister(p)
                     procState.lock.lock()
                     defer { procState.lock.unlock() }
                     if !procState.resumed {
@@ -675,12 +698,14 @@ public actor SFTPService {
                     }
                 }
                 do {
+                    ProcessRegistry.shared.register(process)
                     try process.run()
                     if let input = inputData {
                         stdinPipe.fileHandleForWriting.write(input)
                     }
                     try? stdinPipe.fileHandleForWriting.close()
                 } catch {
+                    ProcessRegistry.shared.unregister(process)
                     procState.lock.lock()
                     defer { procState.lock.unlock() }
                     if !procState.resumed {

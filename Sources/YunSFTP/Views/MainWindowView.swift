@@ -534,6 +534,7 @@ public struct MainWindowView: View {
             let dest = otherPane.currentURL
             Task {
                 for item in selected {
+                    if TransferManager.shared.consumeCancelRequest() { break }
                     let cleanFileName = SFTPService.decodeLsEscapes(item.name).precomposedStringWithCanonicalMapping
                     let remotePath = SFTPService.normalizeRemotePath(item.url.path)
                     let destFileURL = dest.appendingPathComponent(cleanFileName)
@@ -590,6 +591,7 @@ public struct MainWindowView: View {
             let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
             Task {
                 for item in selected {
+                    if TransferManager.shared.consumeCancelRequest() { break }
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .upload, totalBytes: item.size)
                     await MainActor.run {
                         transferManager.updateProgress(id: taskId, progress: 0.1, bytesTransferred: 0, totalBytes: item.size, message: "Uploading \(item.name)...")
@@ -619,6 +621,7 @@ public struct MainWindowView: View {
             let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
             Task {
                 for item in selected {
+                    if TransferManager.shared.consumeCancelRequest() { break }
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .remoteCopy, totalBytes: item.size)
                     let remoteSrc = SFTPService.normalizeRemotePath(item.url.path)
                     await MainActor.run {
@@ -650,6 +653,7 @@ public struct MainWindowView: View {
 
         Task {
             for item in selected {
+                if TransferManager.shared.consumeCancelRequest() { break }
                 let taskId = transferManager.addTransfer(fileName: item.name, direction: .localCopy, totalBytes: item.size)
                 let destFileURL = dest.appendingPathComponent(item.name)
 
@@ -707,6 +711,7 @@ public struct MainWindowView: View {
             let dest = otherPane.currentURL
             Task {
                 for item in selected {
+                    if TransferManager.shared.consumeCancelRequest() { break }
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .download, totalBytes: item.size)
                     let remotePath = SFTPService.normalizeRemotePath(item.url.path)
                     let destFileURL = dest.appendingPathComponent(item.name)
@@ -761,6 +766,7 @@ public struct MainWindowView: View {
             let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
             Task {
                 for item in selected {
+                    if TransferManager.shared.consumeCancelRequest() { break }
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .upload, totalBytes: item.size)
                     await MainActor.run {
                         transferManager.updateProgress(id: taskId, progress: 0.1, bytesTransferred: 0, totalBytes: item.size, message: "Moving \(item.name)...")
@@ -792,6 +798,7 @@ public struct MainWindowView: View {
             let destPath = SFTPService.normalizeRemotePath(otherPane.remotePath)
             Task {
                 for item in selected {
+                    if TransferManager.shared.consumeCancelRequest() { break }
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .remoteCopy, totalBytes: item.size)
                     let remoteSrc = SFTPService.normalizeRemotePath(item.url.path)
                     await MainActor.run {
@@ -830,6 +837,7 @@ public struct MainWindowView: View {
 
         Task {
             for item in selected {
+                if TransferManager.shared.consumeCancelRequest() { break }
                 let taskId = transferManager.addTransfer(fileName: item.name, direction: .localMove, totalBytes: item.size)
                 transferManager.updateProgress(id: taskId, progress: 0.5, bytesTransferred: 0, totalBytes: item.size, message: "Moving \(item.name)...")
                 do {
@@ -877,6 +885,7 @@ public struct MainWindowView: View {
             Task {
                 var hadError = false
                 for item in targets {
+                    if TransferManager.shared.consumeCancelRequest() { break }
                     let remotePath = SFTPService.normalizeRemotePath(item.url.path)
                     let taskId = transferManager.addTransfer(fileName: item.name, direction: .remoteCopy, totalBytes: item.size)
                     await MainActor.run {

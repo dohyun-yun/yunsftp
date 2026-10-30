@@ -90,6 +90,7 @@ public class ClipboardService: ObservableObject {
                 if srcRemote, let conn = srcConn {
                     // Download from Remote to Local with Live Monitoring
                     for item in itemsToPaste {
+                        if TransferManager.shared.consumeCancelRequest() { break }
                         let cleanFileName = SFTPService.decodeLsEscapes(item.name).precomposedStringWithCanonicalMapping
                         let remotePath = SFTPService.decodeLsEscapes(item.url.path).precomposedStringWithCanonicalMapping
                         let destFileURL = destDir.appendingPathComponent(cleanFileName)
@@ -143,6 +144,7 @@ public class ClipboardService: ObservableObject {
                     // Local to Local (Copy or Move)
                     let dir: TransferDirection = wasCut ? .localMove : .localCopy
                     for item in itemsToPaste {
+                        if TransferManager.shared.consumeCancelRequest() { break }
                         let taskId = transferManager.addTransfer(
                             fileName: item.name,
                             direction: dir,
@@ -200,6 +202,7 @@ public class ClipboardService: ObservableObject {
                 if !srcRemote {
                     // Upload Local to Remote
                     for item in itemsToPaste {
+                        if TransferManager.shared.consumeCancelRequest() { break }
                         let taskId = transferManager.addTransfer(
                             fileName: item.name,
                             direction: .upload,
@@ -226,6 +229,7 @@ public class ClipboardService: ObservableObject {
                 } else if let srcConn = srcConn {
                     // Remote to Remote
                     for item in itemsToPaste {
+                        if TransferManager.shared.consumeCancelRequest() { break }
                         let taskId = transferManager.addTransfer(
                             fileName: item.name,
                             direction: .remoteCopy,

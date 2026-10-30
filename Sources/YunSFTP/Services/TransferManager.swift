@@ -72,7 +72,21 @@ public class TransferManager: ObservableObject {
     @Published public var currentTransfer: TransferTaskItem? = nil
     @Published public var isVisible: Bool = false
 
+    /// Set when the user cancels an active transfer. Batch loops poll it via
+    /// `consumeCancelRequest()` so the remaining files of the batch are skipped.
+    public private(set) var cancelRequested: Bool = false
+
     public init() {}
+
+    public func consumeCancelRequest() -> Bool {
+        defer { cancelRequested = false }
+        return cancelRequested
+    }
+
+    private func requestCancel() {
+        cancelRequested = true
+        ProcessRegistry.shared.terminateAll()
+    }
 
     public var hasActiveTransfers: Bool {
         transfers.contains { $0.state == .inProgress || $0.state == .queued }
@@ -135,6 +149,8 @@ public class TransferManager: ObservableObject {
 
     public func markFailed(id: UUID, error: String) {
         if let idx = transfers.firstIndex(where: { $0.id == id }) {
+            // A terminated process reports an error; keep the user's "cancelled" state.
+            guard transfers[idx].state != .cancelled else { updateCurrentTransfer(); return }
             transfers[idx].state = .failed(error)
             transfers[idx].statusMessage = error
             currentTransfer = transfers[idx]
@@ -145,6 +161,9 @@ public class TransferManager: ObservableObject {
 
     public func cancelTransfer(id: UUID) {
         if let idx = transfers.firstIndex(where: { $0.id == id }) {
+            if transfers[idx].state == .inProgress || transfers[idx].state == .queued {
+                requestCancel()
+            }
             transfers[idx].state = .cancelled
             transfers[idx].statusMessage = "Cancelled"
             currentTransfer = transfers[idx]
@@ -153,6 +172,7 @@ public class TransferManager: ObservableObject {
     }
 
     public func cancelAll() {
+        if hasActiveTransfers { requestCancel() }
         for i in 0..<transfers.count {
             if transfers[i].state == .inProgress || transfers[i].state == .queued {
                 transfers[i].state = .cancelled

@@ -134,6 +134,7 @@ public class DragDropManager: ObservableObject {
                 if sourceIsRemote, let conn = sourceConn {
                     // SFTP Download with Live Monitoring
                     for item in items {
+                        if TransferManager.shared.consumeCancelRequest() { break }
                         let cleanFileName = SFTPService.decodeLsEscapes(item.name).precomposedStringWithCanonicalMapping
                         let remotePath = SFTPService.decodeLsEscapes(item.url.path).precomposedStringWithCanonicalMapping
                         let destFileURL = destDir.appendingPathComponent(cleanFileName)
@@ -184,6 +185,7 @@ public class DragDropManager: ObservableObject {
                 } else {
                     // Local to Local Copy with Live Monitoring
                     for item in items {
+                        if TransferManager.shared.consumeCancelRequest() { break }
                         let taskId = transferManager.addTransfer(
                             fileName: item.name,
                             direction: .localCopy,
@@ -245,6 +247,7 @@ public class DragDropManager: ObservableObject {
                 if !sourceIsRemote {
                     // Upload Local to Remote
                     for item in items {
+                        if TransferManager.shared.consumeCancelRequest() { break }
                         let taskId = transferManager.addTransfer(
                             fileName: item.name,
                             direction: .upload,
@@ -268,6 +271,7 @@ public class DragDropManager: ObservableObject {
                 } else if let srcConn = sourceConn {
                     // Remote to Remote Transfer
                     for item in items {
+                        if TransferManager.shared.consumeCancelRequest() { break }
                         let taskId = transferManager.addTransfer(
                             fileName: item.name,
                             direction: .remoteCopy,

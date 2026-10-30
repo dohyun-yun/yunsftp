@@ -3,6 +3,7 @@ import SwiftUI
 /// Queue + history of every transfer, with per-row cancel and retry.
 public struct TransfersWindowView: View {
     @ObservedObject private var manager: TransferManager = .shared
+    @ObservedObject private var edits: RemoteEditService = .shared
 
     public init() {}
 
@@ -11,6 +12,28 @@ public struct TransfersWindowView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            if !edits.sessions.isEmpty {
+                List {
+                    Section("Editing on server (\(edits.sessions.count)) — saved files upload automatically") {
+                        ForEach(edits.sessions) { s in
+                            HStack {
+                                Image(systemName: "pencil.circle").foregroundStyle(Color.accentColor)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(s.fileName).font(.body)
+                                    Text(s.lastError ?? "\(s.connection.displayTitle):\(s.remotePath) · uploaded \(s.uploadCount)×")
+                                        .font(.caption).foregroundStyle(s.lastError == nil ? Color.secondary : Color.red)
+                                }
+                                Spacer()
+                                Button("Stop") { edits.stop(sessionID: s.id) }.controlSize(.small)
+                            }
+                        }
+                    }
+                }
+                .listStyle(.inset)
+                .frame(maxHeight: 140)
+                Divider()
+            }
+
             if manager.transfers.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "arrow.up.arrow.down.circle")

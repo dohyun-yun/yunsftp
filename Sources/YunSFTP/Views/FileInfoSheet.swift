@@ -3,6 +3,7 @@ import AppKit
 
 public struct FileInfoSheet: View {
     let item: FileItem
+    var pane: PaneModel? = nil
     @Environment(\.dismiss) private var dismiss
 
     public var body: some View {

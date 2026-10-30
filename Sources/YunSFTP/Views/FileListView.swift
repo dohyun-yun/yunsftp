@@ -369,6 +369,20 @@ public struct FileListView: View {
             }
         }
 
+        if pane.isRemote && !item.isDirectory, let conn = pane.remoteConnection {
+            Button("Edit in External Editor") {
+                onActivate()
+                let pwd = pane.remotePassword ?? (conn.authType == .password ? KeychainService.shared.loadPassword(for: conn) : nil)
+                Task {
+                    do {
+                        try await RemoteEditService.shared.edit(item: item, connection: conn, password: pwd)
+                    } catch {
+                        pane.errorMessage = "Could not open for editing: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+
         Button("Toggle Selection (Space)") {
             onActivate()
             pane.focusedItemURL = item.url

@@ -4,6 +4,7 @@ import AppKit
 public struct SidebarView: View {
     @Binding var customFavorites: [FavoriteLocation]
     @ObservedObject var connectionManager = ConnectionManager.shared
+    @State private var hoveredConnectionId: UUID? = nil
     var connectedConnectionIds: Set<UUID> = []
     var onSelectLocation: (URL) -> Void
     var onOpenConnection: (RemoteConnection) -> Void
@@ -14,7 +15,7 @@ public struct SidebarView: View {
     public var body: some View {
         List {
             // Favorites
-            Section(header: Text("Favorites").font(.system(size: 11, weight: .semibold))) {
+            Section(header: Text("Favorites").font(.subheadline.weight(.semibold))) {
                 ForEach(FavoriteLocation.defaultFavorites) { fav in
                     SidebarItemRow(name: fav.name, iconName: fav.systemIconName) {
                         onSelectLocation(fav.url)
@@ -36,11 +37,11 @@ public struct SidebarView: View {
             // Remote Connections (SSH / SFTP / FTP)
             Section(
                 header: HStack {
-                    Text("Connections").font(.system(size: 11, weight: .semibold))
+                    Text("Connections").font(.subheadline.weight(.semibold))
                     Spacer()
                     Button(action: onManageConnections) {
                         Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 10))
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -52,10 +53,10 @@ public struct SidebarView: View {
                         Button(action: { _ = connectionManager.importFromSSHConfig() }) {
                             HStack(spacing: 6) {
                                 Image(systemName: "square.and.arrow.down")
-                                    .font(.system(size: 12))
+                                    .font(.callout)
                                     .foregroundColor(.secondary)
                                 Text("Import from ~/.ssh/config")
-                                    .font(.system(size: 11))
+                                    .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
                         }
@@ -65,10 +66,10 @@ public struct SidebarView: View {
                     Button(action: onManageConnections) {
                         HStack(spacing: 6) {
                             Image(systemName: "plus.circle")
-                                .font(.system(size: 12))
+                                .font(.callout)
                                 .foregroundColor(.secondary)
                             Text("Add Connection...")
-                                .font(.system(size: 11))
+                                .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -80,16 +81,16 @@ public struct SidebarView: View {
                             Button(action: { onOpenConnection(conn) }) {
                                 HStack(spacing: 8) {
                                     Image(systemName: conn.connectionProtocol.systemIconName)
-                                        .font(.system(size: 12))
+                                        .font(.callout)
                                         .foregroundColor(.accentColor)
                                         .frame(width: 16)
 
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(conn.displayTitle)
-                                            .font(.system(size: 12))
+                                            .font(.callout)
                                             .lineLimit(1)
                                         Text(verbatim: conn.formattedHostPort)
-                                            .font(.system(size: 9))
+                                            .font(.caption2)
                                             .foregroundColor(.secondary)
                                             .lineLimit(1)
                                     }
@@ -97,19 +98,11 @@ public struct SidebarView: View {
                                     Spacer(minLength: 2)
 
                                     if connectedConnectionIds.contains(conn.id) {
-                                        HStack(spacing: 3) {
-                                            Circle()
-                                                .fill(Color.green)
-                                                .frame(width: 6, height: 6)
-                                                .shadow(color: .green.opacity(0.8), radius: 2)
-                                            Text("ONLINE")
-                                                .font(.system(size: 8, weight: .bold))
-                                                .foregroundColor(.green)
-                                        }
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 1)
-                                        .background(Color.green.opacity(0.12))
-                                        .cornerRadius(4)
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 7, height: 7)
+                                            .accessibilityLabel("Connected")
+                                            .help("Connected")
                                     } else if conn.isImportedFromForkLift2 {
                                         Image(systemName: "arrow.triangle.merge")
                                             .font(.system(size: 8))
@@ -122,15 +115,20 @@ public struct SidebarView: View {
 
                             Button(action: { onEditConnection(conn) }) {
                                 Image(systemName: "pencil")
-                                    .font(.system(size: 10))
+                                    .font(.caption)
                                     .foregroundColor(.secondary)
                                     .frame(width: 18, height: 18)
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .help("Edit Connection...")
+                            .accessibilityLabel("Edit \(conn.displayTitle)")
+                            .opacity(hoveredConnectionId == conn.id ? 1 : 0)
                         }
                         .padding(.vertical, 2)
+                        .onHover { hovering in
+                            hoveredConnectionId = hovering ? conn.id : (hoveredConnectionId == conn.id ? nil : hoveredConnectionId)
+                        }
                         .contextMenu {
                             Button("Connect") {
                                 onOpenConnection(conn)
@@ -162,7 +160,7 @@ public struct SidebarView: View {
             }
 
             // Devices
-            Section(header: Text("Devices").font(.system(size: 11, weight: .semibold))) {
+            Section(header: Text("Devices").font(.subheadline.weight(.semibold))) {
                 if DemoHelper.isDemoMode {
                     SidebarItemRow(name: "Macintosh HD", iconName: "internaldrive") {
                         onSelectLocation(URL(fileURLWithPath: "/"))
@@ -181,7 +179,7 @@ public struct SidebarView: View {
             HStack {
                 Button(action: addCustomFolder) {
                     Label("Add Folder...", systemImage: "plus")
-                        .font(.system(size: 11))
+                        .font(.subheadline)
                 }
                 .buttonStyle(.plain)
                 .padding(8)
@@ -213,12 +211,12 @@ private struct SidebarItemRow: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: iconName)
-                    .font(.system(size: 13))
+                    .font(.body)
                     .foregroundColor(.accentColor)
                     .frame(width: 16)
 
                 Text(name)
-                    .font(.system(size: 12))
+                    .font(.callout)
 
                 Spacer()
             }

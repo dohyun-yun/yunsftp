@@ -327,11 +327,28 @@ public final class TransferCoordinator {
     /// Byte-level progress from the native engine (the OpenSSH transport never calls it).
     private func progressReporter(taskID: UUID, expected: Int64, verb: String, name: String) -> @Sendable (Int64) -> Void {
         let manager = self.manager
+        let throttle = ProgressThrottle()
         return { bytes in
+            guard throttle.shouldReport(bytes: bytes, expected: expected) else { return }
             Task { @MainActor in
                 let fraction = expected > 0 ? min(0.99, Double(bytes) / Double(expected)) : 0.5
                 manager.updateProgress(id: taskID, progress: fraction, bytesTransferred: bytes, totalBytes: expected, message: "\(verb) \(name)...")
             }
+        }
+    }
+
+    /// Limits UI updates to one per 1% or 200 ms, whichever comes first; the final byte count always passes.
+    final class ProgressThrottle: @unchecked Sendable {
+        private let lock = NSLock()
+        private var lastBytes: Int64 = -1
+        private var lastTime = Date.distantPast
+        func shouldReport(bytes: Int64, expected: Int64, now: Date = Date()) -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            let complete = expected > 0 && bytes >= expected
+            let step = max(expected / 100, 64 * 1024)
+            guard complete || bytes - lastBytes >= step || now.timeIntervalSince(lastTime) >= 0.2 else { return false }
+            lastBytes = bytes; lastTime = now
+            return true
         }
     }
 

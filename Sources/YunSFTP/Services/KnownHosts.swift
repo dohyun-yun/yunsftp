@@ -23,6 +23,15 @@ public struct KnownHosts: Sendable {
         var sawHost = false
         for entry in entries() {
             guard entry.matches(pattern) else { continue }
+            switch entry.marker {
+            case "@cert-authority":
+                continue                                   // CA lines never vouch for a plain key
+            case "@revoked":
+                if entry.keyType == keyType && entry.keyBase64 == keyBase64 { return .mismatch }
+                continue
+            default:
+                break
+            }
             if entry.keyType != keyType { continue }   // a server may legitimately present several key types
             sawHost = true
             if entry.keyBase64 == keyBase64 { return .trusted }
@@ -38,9 +47,18 @@ public struct KnownHosts: Sendable {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         }
         if FileManager.default.fileExists(atPath: fileURL.path) {
-            let handle = try FileHandle(forWritingTo: fileURL)
+            let handle = try FileHandle(forUpdating: fileURL)   // read the last byte, then append
             defer { try? handle.close() }
-            try handle.seekToEnd()
+            let end = try handle.seekToEnd()
+            if end > 0 {
+                // A hand-edited file may lack the final newline; never glue onto the last entry.
+                try handle.seek(toOffset: end - 1)
+                if let last = try handle.read(upToCount: 1), last != Data("\n".utf8) {
+                    try handle.seekToEnd()
+                    try handle.write(contentsOf: Data("\n".utf8))
+                }
+                try handle.seekToEnd()
+            }
             try handle.write(contentsOf: Data(line.utf8))
         } else {
             try Data(line.utf8).write(to: fileURL)
@@ -52,6 +70,7 @@ public struct KnownHosts: Sendable {
         let hosts: String      // comma-separated patterns, or a hashed `|1|salt|hash`
         let keyType: String
         let keyBase64: String
+        var marker: String? = nil   // "@revoked" / "@cert-authority"
 
         func matches(_ pattern: String) -> Bool {
             if hosts.hasPrefix("|1|") {
@@ -83,9 +102,10 @@ public struct KnownHosts: Sendable {
             let line = raw.trimmingCharacters(in: .whitespaces)
             guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
             var fields = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
-            if fields.first == "@cert-authority" || fields.first == "@revoked" { fields.removeFirst() }
+            var marker: String? = nil
+            if fields.first == "@cert-authority" || fields.first == "@revoked" { marker = fields.removeFirst() }
             guard fields.count >= 3 else { return nil }
-            return Entry(hosts: fields[0], keyType: fields[1], keyBase64: fields[2])
+            return Entry(hosts: fields[0], keyType: fields[1], keyBase64: fields[2], marker: marker)
         }
     }
 }

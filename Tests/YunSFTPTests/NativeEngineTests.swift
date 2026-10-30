@@ -7,7 +7,7 @@ final class NativeEngineTests: XCTestCase {
     private var base: URL!
     private var remote: URL!
     private var local: URL!
-    private var savedKnownHosts: URL!
+    private var savedKnownHosts: URL?
     private var savedOverride: TransferEngine?
 
     override func setUpWithError() throws {
@@ -25,7 +25,7 @@ final class NativeEngineTests: XCTestCase {
     override func tearDown() async throws {
         await NativeSFTPEngine.shared.disconnectAll()
         await SFTPService.shared.forgetFallbacks()
-        NativeSFTPEngine.knownHostsURL = savedKnownHosts
+        if let savedKnownHosts { NativeSFTPEngine.knownHostsURL = savedKnownHosts }
         SFTPService.engineOverride = savedOverride
         server?.stop()
         if let base { try? FileManager.default.removeItem(at: base) }
@@ -125,6 +125,54 @@ final class NativeEngineTests: XCTestCase {
         _ = try? await SFTPService.shared.listDirectory(path: remote.path, connection: conn, password: nil)
         let used = await SFTPService.shared.lastEngineUsed[conn.id]
         XCTAssertEqual(used, .openSSH)
+    }
+
+    func testMissingKeyFileFallsBackToOpenSSH() async throws {
+        let conn = connection(keyPath: base.appendingPathComponent("no-such-key").path)
+        _ = try? await SFTPService.shared.listDirectory(path: remote.path, connection: conn, password: nil)
+        let used = await SFTPService.shared.lastEngineUsed[conn.id]
+        XCTAssertEqual(used, .openSSH, "ssh may still succeed via ssh-agent; the native engine must step aside")
+    }
+
+    func testPasswordAuthServerRejectionFallsBackInsteadOfFailingHard() async throws {
+        // This sshd only accepts public keys; the native engine offers `password` only and must
+        // hand over to OpenSSH (which also tries keyboard-interactive) rather than report a fatal auth failure.
+        var conn = connection(); conn.authType = .password
+        _ = try? await SFTPService.shared.listDirectory(path: remote.path, connection: conn, password: "whatever")
+        let used = await SFTPService.shared.lastEngineUsed[conn.id]
+        XCTAssertEqual(used, .openSSH)
+    }
+
+    func testConcurrentFirstUseSharesOneSessionAndEditsGetAFreshOne() async throws {
+        let conn = connection()
+        async let a = SFTPService.shared.listDirectory(path: remote.path, connection: conn, password: nil)
+        async let b = SFTPService.shared.listDirectory(path: remote.path, connection: conn, password: nil)
+        async let c = SFTPService.shared.remoteExists(remote.path, connection: conn, password: nil)
+        _ = try await (a, b, c)
+        let count = await NativeSFTPEngine.shared.sessionCount
+        XCTAssertEqual(count, 1, "three concurrent first calls must share one SSH session")
+
+        var edited = conn; edited.keyFilePath = server.clientKeyPath + ""; edited.username = NSUserName()   // same values, same fingerprint
+        _ = try await SFTPService.shared.listDirectory(path: remote.path, connection: edited, password: nil)
+        let still = await NativeSFTPEngine.shared.sessionCount
+        XCTAssertEqual(still, 1)
+        edited.port = server.port   // unchanged
+        edited.name = "renamed only"
+        _ = try await SFTPService.shared.listDirectory(path: remote.path, connection: edited, password: nil)
+        let afterRename = await NativeSFTPEngine.shared.sessionCount
+        XCTAssertEqual(afterRename, 1, "cosmetic edits keep the session")
+    }
+
+    func testRefusedPortProducesATranslatedConnectionError() async throws {
+        var conn = connection(); conn.port = 1   // nothing listens there
+        do {
+            _ = try await SFTPService.shared.listDirectory(path: remote.path, connection: conn, password: nil)
+            XCTFail("expected a connection error")
+        } catch {
+            let text = error.localizedDescription
+            XCTAssertFalse(text.contains("NIOCore") || text.contains("error 1."), "raw NIO error leaked: \(text)")
+            XCTAssertTrue(text.lowercased().contains("refused") || text.lowercased().contains("connection"), text)
+        }
     }
 
     func testLegacyAlgorithmConnectionsUseOpenSSH() async throws {

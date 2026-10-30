@@ -94,7 +94,10 @@ public final class SettingsStore: ObservableObject {
     public static let shared = SettingsStore()
 
     @Published public var settings: AppSettings {
-        didSet { settings.save(to: defaults) }
+        didSet {
+            settings.save(to: defaults)
+            SFTPService.enginePreference = settings.transferEngine
+        }
     }
     private let defaults: UserDefaults
 

@@ -117,16 +117,25 @@ public actor SFTPService {
     /// Tests pin the engine; the app reads the user's setting.
     public static var engineOverride: TransferEngine?
 
-    /// Connections the native engine could not handle in this session (unsupported key, algorithm negotiation…).
-    private var nativeFallback: Set<UUID> = []
+    /// The user's engine preference, pushed by `SettingsStore` so operations never hit UserDefaults.
+    private static let preferenceLock = NSLock()
+    nonisolated(unsafe) private static var _enginePreference: TransferEngine = AppSettings.load().transferEngine
+    public static var enginePreference: TransferEngine {
+        get { preferenceLock.lock(); defer { preferenceLock.unlock() }; return _enginePreference }
+        set { preferenceLock.lock(); _enginePreference = newValue; preferenceLock.unlock() }
+    }
+
+    /// Connections (by session fingerprint, so an edit resets it) the native engine could not
+    /// handle in this session: unsupported key, keyboard-interactive only, algorithm negotiation…
+    private var nativeFallback: Set<String> = []
     public private(set) var lastEngineUsed: [UUID: EngineUsed] = [:]
 
     func useNative(for connection: RemoteConnection) -> Bool {
-        let engine = Self.engineOverride ?? AppSettings.load().transferEngine
+        let engine = Self.engineOverride ?? Self.enginePreference
         return engine == .native
             && !connection.allowLegacyAlgorithms
             && connection.host != "local-sftp-server"
-            && !nativeFallback.contains(connection.id)
+            && !nativeFallback.contains(connection.sessionFingerprint)
     }
 
     /// Runs `op` on the native engine. Returns nil (and remembers the fallback) when the engine
@@ -138,7 +147,7 @@ public actor SFTPService {
             lastEngineUsed[connection.id] = .native
             return result
         } catch is NativeSFTPEngine.EngineUnsupported {
-            nativeFallback.insert(connection.id)
+            nativeFallback.insert(connection.sessionFingerprint)
             lastEngineUsed[connection.id] = .openSSH
             return nil
         }

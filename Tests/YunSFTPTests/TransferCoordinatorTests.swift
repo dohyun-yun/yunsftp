@@ -197,3 +197,15 @@ extension TransferCoordinatorTests {
         XCTAssertFalse(coordinator.canRetry(taskID: id))
     }
 }
+
+extension TransferCoordinatorTests {
+    func testProgressThrottleReportsPercentStepsAndFinalByte() {
+        let t = TransferCoordinator.ProgressThrottle()
+        let now = Date()
+        XCTAssertTrue(t.shouldReport(bytes: 0, expected: 10_000_000, now: now))
+        XCTAssertFalse(t.shouldReport(bytes: 50_000, expected: 10_000_000, now: now), "less than 1% and 200 ms: skipped")
+        XCTAssertTrue(t.shouldReport(bytes: 150_000, expected: 10_000_000, now: now), ">= 1%")
+        XCTAssertTrue(t.shouldReport(bytes: 160_000, expected: 10_000_000, now: now.addingTimeInterval(0.3)), "time-based")
+        XCTAssertTrue(t.shouldReport(bytes: 10_000_000, expected: 10_000_000, now: now), "completion always reported")
+    }
+}

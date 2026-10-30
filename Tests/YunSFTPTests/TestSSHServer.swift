@@ -73,14 +73,6 @@ final class TestSSHServer {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    func connection(remotePath: String, keyPath: String? = nil) -> RemoteConnectionLike {
-        RemoteConnectionLike(host: "127.0.0.1", port: port, username: NSUserName(), remotePath: remotePath, keyPath: keyPath ?? clientKeyPath)
-    }
-
-    struct RemoteConnectionLike {
-        let host: String; let port: Int; let username: String; let remotePath: String; let keyPath: String
-    }
-
     private static func freePort() throws -> Int {
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         defer { close(fd) }

@@ -44,3 +44,25 @@ final class KnownHostsTests: XCTestCase {
         XCTAssertEqual(kh.verdict(host: "host.example", port: 2299, keyType: "ssh-ed25519", keyBase64: "AAAAnew"), .trusted)
     }
 }
+
+extension KnownHostsTests {
+    func testRevokedAndCertificateAuthorityMarkers() throws {
+        let kh = try store("""
+        @revoked nas.example ssh-ed25519 AAAAbad
+        @cert-authority *.corp.example ssh-ed25519 AAAAca
+        nas.example ssh-ed25519 AAAAgood
+        """)
+        XCTAssertEqual(kh.verdict(host: "nas.example", port: 22, keyType: "ssh-ed25519", keyBase64: "AAAAbad"), .mismatch, "revoked keys are rejected")
+        XCTAssertEqual(kh.verdict(host: "nas.example", port: 22, keyType: "ssh-ed25519", keyBase64: "AAAAgood"), .trusted)
+        XCTAssertEqual(kh.verdict(host: "box.corp.example", port: 22, keyType: "ssh-ed25519", keyBase64: "AAAAplain"), .unknown, "a CA line is not a host key")
+    }
+
+    func testRememberAddsMissingTrailingNewlineFirst() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("kh_\(UUID().uuidString)")
+        try "old.example ssh-rsa AAAAold".write(to: url, atomically: true, encoding: .utf8)   // no final newline
+        let kh = KnownHosts(fileURL: url)
+        try kh.remember(host: "new.example", port: 22, keyType: "ssh-ed25519", keyBase64: "AAAAnew")
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "old.example ssh-rsa AAAAold\nnew.example ssh-ed25519 AAAAnew\n")
+        XCTAssertEqual(kh.verdict(host: "old.example", port: 22, keyType: "ssh-rsa", keyBase64: "AAAAold"), .trusted)
+    }
+}

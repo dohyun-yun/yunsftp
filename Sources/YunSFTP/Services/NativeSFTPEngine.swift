@@ -4,6 +4,7 @@ import NIOSSH
 import Citadel
 import Crypto
 import _CryptoExtras
+import NIOPosix
 
 /// SFTP over swift-nio-ssh (Citadel). One SSH session per connection, reused across operations.
 /// Errors are mapped to the same `SFTPService` NSError codes the OpenSSH transport produces,
@@ -21,19 +22,48 @@ public actor NativeSFTPEngine {
         let ssh: SSHClient
         let sftp: SFTPClient
     }
-    private var sessions: [UUID: Session] = [:]
+    private var sessions: [String: Session] = [:]
+    private var connecting: [String: Task<SFTPClient, Error>] = [:]
 
     public init() {}
+
+    /// Live sessions (tests observe that concurrent callers share one connection).
+    public var sessionCount: Int { sessions.count }
 
     // MARK: - Session
 
     private func session(for connection: RemoteConnection, password: String?) async throws -> SFTPClient {
-        if let s = sessions[connection.id], s.ssh.isConnected, s.sftp.isActive {
+        let key = connection.sessionFingerprint
+        if let s = sessions[key], s.ssh.isConnected, s.sftp.isActive {
             return s.sftp
         }
-        sessions[connection.id] = nil
-        let auth = try Self.authenticationMethod(for: connection, password: password)
-        let validator = KnownHostsValidator(host: connection.host, port: connection.port, store: KnownHosts(fileURL: Self.knownHostsURL))
+        if let s = sessions.removeValue(forKey: key) {
+            Task { try? await s.sftp.close(); try? await s.ssh.close() }
+        }
+        // Concurrent first-use callers (two panes, a listing racing a transfer) share one connect.
+        if let inFlight = connecting[key] { return try await inFlight.value }
+        let task = Task<SFTPClient, Error> { try await Self.openSession(for: connection, password: password) }
+        connecting[key] = task
+        defer { connecting[key] = nil }
+        let sftp = try await task.value
+        if let ssh = Self.pendingSSHClients.take(for: key) {
+            sessions[key] = Session(ssh: ssh, sftp: sftp)
+        }
+        return sftp
+    }
+
+    /// Hands the SSHClient from `openSession` back to the actor (the connect task is not isolated).
+    private final class PendingClients: @unchecked Sendable {
+        private let lock = NSLock()
+        private var clients: [String: SSHClient] = [:]
+        func put(_ client: SSHClient, for key: String) { lock.lock(); clients[key] = client; lock.unlock() }
+        func take(for key: String) -> SSHClient? { lock.lock(); defer { lock.unlock() }; return clients.removeValue(forKey: key) }
+    }
+    private static let pendingSSHClients = PendingClients()
+
+    private static func openSession(for connection: RemoteConnection, password: String?) async throws -> SFTPClient {
+        let auth = try authenticationMethod(for: connection, password: password)
+        let validator = KnownHostsValidator(host: connection.host, port: connection.port, store: KnownHosts(fileURL: knownHostsURL))
         let ssh: SSHClient
         do {
             ssh = try await SSHClient.connect(
@@ -42,26 +72,31 @@ public actor NativeSFTPEngine {
                 authenticationMethod: auth,
                 hostKeyValidator: .custom(validator),
                 reconnect: .never,
-                connectTimeout: Self.connectTimeout
+                connectTimeout: connectTimeout
             )
         } catch {
             if let hostKeyError = validator.failure { throw hostKeyError }
-            throw Self.mapConnectError(error)
+            throw mapConnectError(error)
         }
         let sftp = try await ssh.openSFTP()
-        sessions[connection.id] = Session(ssh: ssh, sftp: sftp)
+        pendingSSHClients.put(ssh, for: connection.sessionFingerprint)
         return sftp
     }
 
-    public func disconnect(connectionID: UUID) async {
-        if let s = sessions.removeValue(forKey: connectionID) {
+    public func disconnect(_ connection: RemoteConnection) async {
+        if let s = sessions.removeValue(forKey: connection.sessionFingerprint) {
             try? await s.sftp.close()
             try? await s.ssh.close()
         }
     }
 
     public func disconnectAll() async {
-        for id in Array(sessions.keys) { await disconnect(connectionID: id) }
+        for key in Array(sessions.keys) {
+            if let s = sessions.removeValue(forKey: key) {
+                try? await s.sftp.close()
+                try? await s.ssh.close()
+            }
+        }
     }
 
     static func authenticationMethod(for connection: RemoteConnection, password: String?) throws -> SSHAuthenticationMethod {
@@ -74,7 +109,10 @@ public actor NativeSFTPEngine {
             return .passwordBased(username: user, password: password)
         case .sshKey:
             let path = (connection.keyFilePath.isEmpty ? "~/.ssh/id_ed25519" : connection.keyFilePath) as NSString
-            let text = try String(contentsOfFile: path.expandingTildeInPath, encoding: .utf8)
+            // No readable key file: OpenSSH may still succeed through ssh-agent or other identities.
+            guard let text = try? String(contentsOfFile: path.expandingTildeInPath, encoding: .utf8) else {
+                throw EngineUnsupported.privateKey
+            }
             return try privateKeyAuthentication(username: user, keyText: text)
         }
     }
@@ -95,21 +133,39 @@ public actor NativeSFTPEngine {
     public enum EngineUnsupported: Error { case privateKey, negotiation(String) }
 
     static func mapConnectError(_ error: Error) -> Error {
-        if error is EngineUnsupported { return error }
+        if error is EngineUnsupported || error is CancellationError { return error }
         if let e = error as? SSHClientError {
-            switch e {
-            case .allAuthenticationOptionsFailed:
-                return NSError(domain: "SFTPService", code: SFTPService.authenticationFailureCode,
-                               userInfo: [NSLocalizedDescriptionKey: SFTPService.translateErrorMessage("Permission denied (publickey,password).", exitCode: 255)])
-            case .unsupportedPasswordAuthentication, .unsupportedPrivateKeyAuthentication, .unsupportedHostBasedAuthentication:
-                return EngineUnsupported.negotiation("\(e)")
-            default: break
+            // swift-nio-ssh has no keyboard-interactive and no agent: let OpenSSH give the verdict.
+            return EngineUnsupported.negotiation("\(e)")
+        }
+        if let e = error as? NIOSSHError {
+            if e.type == .keyExchangeNegotiationFailure || e.type == .unsupportedVersion || e.type == .protocolViolation {
+                return EngineUnsupported.negotiation(String(describing: e))
+            }
+            return connectionError(String(describing: e))
+        }
+        if let e = error as? ChannelError, e == .connectTimeout(connectTimeout) || "\(e)".contains("connectTimeout") {
+            return connectionError("Connection timed out")
+        }
+        if let e = error as? IOError {
+            switch e.errnoCode {
+            case ECONNREFUSED: return connectionError("Connection refused")
+            case EHOSTUNREACH, ENETUNREACH: return connectionError("No route to host")
+            case ETIMEDOUT: return connectionError("Connection timed out")
+            default: return connectionError(e.description)
             }
         }
-        if let e = error as? NIOSSHError, e.type == .keyExchangeNegotiationFailure || e.type == .unsupportedVersion || e.type == .protocolViolation {
-            return EngineUnsupported.negotiation(String(describing: e))
+        let text = String(describing: error)
+        if text.contains("connectTimeout") || text.contains("timed out") { return connectionError("Connection timed out") }
+        if text.contains("ECONNREFUSED") || text.contains("refused") { return connectionError("Connection refused") }
+        if text.contains("nodename nor servname") || text.contains("DNS") || text.contains("getaddrinfo") || text.contains("could not be resolved") {
+            return connectionError("DNS lookup failed. Host could not be resolved.")
         }
-        return error
+        return connectionError(error.localizedDescription)
+    }
+
+    private static func connectionError(_ raw: String) -> NSError {
+        NSError(domain: "SFTPService", code: 255, userInfo: [NSLocalizedDescriptionKey: SFTPService.translateErrorMessage(raw, exitCode: 255)])
     }
 
     static func mapSFTPError(_ error: Error, path: String) -> Error {
@@ -363,6 +419,13 @@ final class KnownHostsValidator: NIOSSHClientServerAuthenticationDelegate, @unch
 
     func validateHostKey(hostKey: NIOSSHPublicKey, validationCompletePromise: EventLoopPromise<Void>) {
         let described = Self.describe(hostKey)
+        if described.type.contains("-cert-") {
+            // Certificate host keys need the @cert-authority logic OpenSSH has; let it handle them.
+            let error = NativeSFTPEngine.EngineUnsupported.negotiation("certificate host key")
+            lock.lock(); _failure = error; lock.unlock()
+            validationCompletePromise.fail(error)
+            return
+        }
         switch store.verdict(host: host, port: port, keyType: described.type, keyBase64: described.base64) {
         case .trusted:
             validationCompletePromise.succeed(())

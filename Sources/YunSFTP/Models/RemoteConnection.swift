@@ -101,6 +101,12 @@ public struct RemoteConnection: Identifiable, Codable, Hashable, Sendable {
         allowLegacyAlgorithms = try c.decodeIfPresent(Bool.self, forKey: .allowLegacyAlgorithms) ?? false
     }
 
+    /// Everything that changes which server/identity a live session talks to. Sessions and
+    /// engine fallbacks are keyed by this, so editing a connection never reuses a stale session.
+    public var sessionFingerprint: String {
+        "\(id.uuidString)|\(host.lowercased()):\(port)|\(username)|\(authType.rawValue)|\(keyFilePath)|\(allowLegacyAlgorithms)"
+    }
+
     /// Two saved connections can point at one server; compare the endpoint, not the id.
     public func isSameServer(as other: RemoteConnection) -> Bool {
         return host.caseInsensitiveCompare(other.host) == .orderedSame && port == other.port && username == other.username

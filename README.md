@@ -76,7 +76,7 @@ Most file transfer apps today are bloated with paid subscription models, intrusi
 ### 4. Resilient SFTP & Unicode Parity
 - **Full NFC / NFD Normalization**: Bridges macOS decomposed Unicode (NFD) and Linux server precomposed Unicode (NFC), preventing `"No such file or directory"` errors on foreign filenames.
 - **Real-Time C-Escape Decoding**: Automatically detects and decodes 8-bit octal (`\353\266\200...`) and 16-bit hex escape sequences into clean human-readable Unicode text.
-- **Clean Port Formatting**: Strict numeric port handling without localization commas (`2222` instead of `13,622`).
+- **Clean Port Formatting**: Strict numeric port handling without localization commas (`2222` instead of `2,222`).
 - **Encrypted Keychain Storage**: Stores passwords securely using Apple's `Security.framework`.
 - **Live Socket Diagnostics (`ConnectionTestService`)**: One-click TCP socket handshake, SSH banner inspection, and millisecond latency test.
 

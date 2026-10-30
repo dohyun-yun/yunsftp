@@ -284,4 +284,4 @@ Right-click any file or folder and select **Permissions (chmod)**:
 **Solution**: `yunsftp` includes a real-time C-escape parsing engine that automatically detects and decodes 8-bit octal, 16-bit hex, and standard slash escapes into human-readable Unicode text.
 
 ### Custom Ports & Firewall Settings
-When connecting to SFTP on a non-standard port (e.g. `2222`), `yunsftp` formats the port strictly as integer digits without localization commas (`2222` instead of `13,622`). Ensure your server firewall allows TCP traffic on your designated port.
+When connecting to SFTP on a non-standard port (e.g. `2222`), `yunsftp` formats the port strictly as integer digits without localization commas (`2222` instead of `2,222`). Ensure your server firewall allows TCP traffic on your designated port.

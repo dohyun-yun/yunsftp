@@ -14,7 +14,7 @@ Status board for the hardening pass. One commit per item. Legend: `[ ]` todo, `[
 
 ## P1 Public repository hygiene
 
-- [ ] 8. Remove ad-hoc `scripts/test_*.swift` (hardcoded personal hosts); remove environment-specific heuristics from migration.
+- [x] 8. Remove ad-hoc `scripts/test_*.swift` (hardcoded personal hosts); remove environment-specific heuristics from migration.
 - [ ] 9. Remove ForkLift leftovers: duplicate icns/entitlements, legacy keychain/UserDefaults namespaces, queue labels, install.sh legacy removal.
 - [ ] 10. Unify user-facing strings to English.
 - [ ] 11. README/User Guide accuracy: platform/Swift versions, test badge, Gatekeeper first-run note, SSH agent note, neutral comparison tone; version read from Info.plist in release script.

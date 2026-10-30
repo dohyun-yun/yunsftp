@@ -16,6 +16,16 @@ public struct MigrationService {
         return FileManager.default.fileExists(atPath: forkLift2PlistPath)
     }
 
+    /// ForkLift 2 stores SFTP bookmarks as type 200; anything else on port 22 is treated as SFTP too.
+    static func importedProtocol(type: Int, port: Int) -> ConnectionProtocol {
+        return (type == 200 || port == 22) ? .sftp : .ftp
+    }
+
+    static func importedConnectionName(host: String) -> String {
+        let first = host.components(separatedBy: ".").first ?? host
+        return first.isEmpty ? host : first.capitalized
+    }
+
     public func migrateFromForkLift2() -> MigrationResult {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: forkLift2PlistPath)),
               let rootDict = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] else {
@@ -111,16 +121,16 @@ public struct MigrationService {
                 // If it is a remote connection
                 if let host = host, !host.isEmpty, host != "$null" {
                     let resolvedPort = port > 0 ? port : (type == 200 ? 22 : 21)
-                    let proto: ConnectionProtocol = (type == 200 || resolvedPort == 22 || resolvedPort == 2222) ? .sftp : .ftp
+                    let proto = Self.importedProtocol(type: type, port: resolvedPort)
                     let username = (user == "$null" ? "" : user) ?? ""
                     let cleanPath = (path == "$null" || path.isEmpty) ? "/" : path
-                    let serverName = host.components(separatedBy: ".").first?.capitalized ?? host
+                    let serverName = Self.importedConnectionName(host: host)
 
                     let defaultKeyPath = ("~/.ssh/id_ed25519" as NSString).expandingTildeInPath
                     let hasKey = FileManager.default.fileExists(atPath: defaultKeyPath)
 
                     let conn = RemoteConnection(
-                        name: "\(serverName) (Synology)",
+                        name: serverName,
                         connectionProtocol: proto,
                         host: host,
                         port: resolvedPort,

@@ -160,19 +160,24 @@ public actor SFTPService {
         return String(decoding: utf8Bytes, as: UTF8.self).precomposedStringWithCanonicalMapping
     }
 
-    private func commonSSHOptions(port: Int) -> [String] {
+    /// Shared OpenSSH options. Host keys are verified against the default known_hosts file
+    /// (trust-on-first-use via `accept-new`); algorithms are left at OpenSSH defaults.
+    /// Sessions are multiplexed through a ControlMaster socket so each operation does not
+    /// pay for a new handshake + authentication.
+    static let controlPath: String = (NSTemporaryDirectory() as NSString).appendingPathComponent("ys-%C")
+
+    static var commonSSHOptions: [String] {
         return [
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "StrictHostKeyChecking=accept-new",
             "-o", "ConnectTimeout=10",
             "-o", "ServerAliveInterval=15",
             "-o", "ServerAliveCountMax=3",
-            "-o", "PubkeyAcceptedKeyTypes=+ssh-rsa,ssh-ed25519",
-            "-o", "HostkeyAlgorithms=+ssh-rsa,ssh-ed25519",
-            "-o", "KexAlgorithms=+curve25519-sha256,diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha256",
             "-o", "PreferredAuthentications=publickey,password,keyboard-interactive",
             "-o", "NumberOfPasswordPrompts=1",
-            "-o", "BatchMode=no"
+            "-o", "BatchMode=no",
+            "-o", "ControlMaster=auto",
+            "-o", "ControlPath=\(controlPath)",
+            "-o", "ControlPersist=60"
         ]
     }
 
@@ -279,7 +284,7 @@ public actor SFTPService {
 
         // 3. Fallback to scp (quoting remoteSpec for remote shell execution)
         var args = ["-P", "\(connection.port)"]
-        args.append(contentsOf: commonSSHOptions(port: connection.port))
+        args.append(contentsOf: Self.commonSSHOptions)
 
         if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
             let expandedKey = (connection.keyFilePath as NSString).expandingTildeInPath
@@ -325,7 +330,7 @@ public actor SFTPService {
             } catch {
                 // 3. Fallback to scp (quoting remoteDest for remote shell execution)
                 var args = ["-P", "\(connection.port)"]
-                args.append(contentsOf: commonSSHOptions(port: connection.port))
+                args.append(contentsOf: Self.commonSSHOptions)
 
                 if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
                     let expandedKey = (connection.keyFilePath as NSString).expandingTildeInPath
@@ -581,7 +586,7 @@ public actor SFTPService {
     private func executeSSH(command: String, connection: RemoteConnection, password: String?) async throws -> String {
         let effectivePwd = resolvePassword(password: password, connection: connection)
         var args = ["-p", "\(connection.port)"]
-        args.append(contentsOf: commonSSHOptions(port: connection.port))
+        args.append(contentsOf: Self.commonSSHOptions)
 
         if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
             let expandedKey = (connection.keyFilePath as NSString).expandingTildeInPath
@@ -603,7 +608,7 @@ public actor SFTPService {
             args.append(contentsOf: ["-D", sftpServerPath, "-b", "-", "dummy"])
         } else {
             args.append(contentsOf: ["-P", "\(connection.port)"])
-            args.append(contentsOf: commonSSHOptions(port: connection.port))
+            args.append(contentsOf: Self.commonSSHOptions)
             args.append(contentsOf: ["-b", "-"])
 
             if connection.authType == .sshKey && !connection.keyFilePath.isEmpty {
@@ -727,6 +732,11 @@ public actor SFTPService {
 
     static func translateErrorMessage(_ rawError: String, exitCode: Int) -> String {
         let lower = rawError.lowercased()
+
+        // 0. Host key mismatch (possible MITM or reinstalled server)
+        if lower.contains("remote host identification has changed") || lower.contains("host key verification failed") {
+            return "Host key verification failed: the server's key does not match the one saved in ~/.ssh/known_hosts. If the server was reinstalled, remove its entry with `ssh-keygen -R <host>`; otherwise the connection may be intercepted."
+        }
 
         // 1. Connection-level errors
         if lower.contains("connection reset") {

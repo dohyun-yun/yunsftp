@@ -94,11 +94,14 @@ public final class RemoteEditService: ObservableObject {
         }
         await coordinator.wait(for: batch)
         if let i = sessions.firstIndex(where: { $0.id == sessionID }) {
-            if case .failed(let message)? = coordinator.state(ofBatch: batch) {
-                sessions[i].lastError = message
-            } else {
+            switch coordinator.state(ofBatch: batch) {
+            case .completed?:
                 sessions[i].uploadCount += 1
                 sessions[i].lastError = nil
+            case .failed(let message)?:
+                sessions[i].lastError = message
+            default:
+                sessions[i].lastError = L("Upload did not complete.")
             }
         }
     }

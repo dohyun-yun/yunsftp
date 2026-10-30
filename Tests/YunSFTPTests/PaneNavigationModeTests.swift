@@ -74,3 +74,34 @@ extension PaneNavigationModeTests {
         XCTAssertEqual(pane.remotePath, "/data", "a history entry from another server is ignored")
     }
 }
+
+extension PaneNavigationModeTests {
+    func testBackReturnsToThePreviousConnectionEvenOnTheSameHost() async throws {
+        guard FileManager.default.fileExists(atPath: "/usr/libexec/sftp-server") else { throw XCTSkip("no sftp-server") }
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("yunsftp_hist_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let alice = RemoteConnection(name: "alice", host: "local-sftp-server", port: 22, username: "alice", remotePath: base.path, authType: .sshKey)
+        let root = RemoteConnection(name: "root", host: "local-sftp-server", port: 22, username: "root", remotePath: base.path, authType: .sshKey)
+        let pane = PaneModel(initialURL: FileManager.default.temporaryDirectory, autoLoad: false)
+        pane.connectRemote(connection: alice)
+        await waitUntil { !pane.isLoading }
+        pane.connectRemote(connection: root)
+        await waitUntil { !pane.isLoading }
+        XCTAssertEqual(pane.remoteConnection?.id, root.id)
+        pane.goBack()
+        await waitUntil { !pane.isLoading }
+        XCTAssertEqual(pane.remoteConnection?.id, alice.id, "same host and port, but the history entry belongs to alice")
+        pane.goForward()
+        await waitUntil { !pane.isLoading }
+        XCTAssertEqual(pane.remoteConnection?.id, root.id)
+    }
+
+    func testUnreachableHistoryEntryDoesNotMoveTheIndex() {
+        let pane = PaneModel(initialURL: FileManager.default.temporaryDirectory, autoLoad: false)
+        let a = RemoteConnection(name: "A", host: "a.example", port: 22)
+        pane.isRemote = true; pane.remoteConnection = a; pane.remotePath = "/x"
+        XCTAssertFalse(pane.navigateTo(SFTPService.sftpURL(host: "b.example", port: 22, path: "/y")))
+        XCTAssertFalse(pane.navigateTo(URL(fileURLWithPath: "/definitely/not/here")))
+    }
+}

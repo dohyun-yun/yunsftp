@@ -78,8 +78,8 @@ public final class UpdateChecker {
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 10
         let (data, response) = try await session.data(for: request)
+        markChecked()               // an error answer still counts as today's attempt
         try Self.validate(response)
-        markChecked()
         guard let info = Self.parseLatestRelease(data), Self.isNewer(info.version, than: currentVersion) else { return nil }
         return info
     }

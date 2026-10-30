@@ -11,15 +11,8 @@ public class DragDropManager: ObservableObject {
     @Published public var sourceIsRemote: Bool = false
     @Published public var sourceConnection: RemoteConnection? = nil
     @Published public var sourceRemotePassword: String? = nil
-    private var resignObserver: Any?
 
-    public init() {
-        // A drag that ends in another app never produces a drop here; the app resigning active
-        // during the drop is the signal that the cached items are stale.
-        resignObserver = NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.endDrag() }
-        }
-    }
+    public init() {}
 
     public func startDrag(items: [FileItem], from pane: PaneModel) {
         self.draggedItems = items
@@ -44,44 +37,14 @@ public class DragDropManager: ObservableObject {
         externalProviders: [NSItemProvider] = [],
         completion: @escaping () -> Void
     ) {
-        // If we have items from an internal drag
-        if !draggedItems.isEmpty {
-            let items = self.draggedItems
-            let srcRemote = self.sourceIsRemote
-            let srcConn = self.sourceConnection
-            let srcPwd = self.sourceRemotePassword
-            self.endDrag()
-
-            executeTransfer(
-                items: items,
-                sourceIsRemote: srcRemote,
-                sourceConn: srcConn,
-                sourcePwd: srcPwd,
-                targetPane: targetPane,
-                targetSubfolder: targetSubfolder,
-                completion: completion
-            )
-            return
-        }
-
-        // Otherwise handle external providers (e.g. from macOS Finder)
-        guard !externalProviders.isEmpty else { return }
-
+        // Resolve what was actually dropped first. Internal drags carry our own URLs (local file
+        // URLs, or the sftp URL registered for this process); a stale internal state from a drag
+        // that ended in another app never matches a later Finder drop.
         var collectedURLs: [URL] = []
         let group = DispatchGroup()
 
         for provider in externalProviders {
-            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
-                group.enter()
-                _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                    if let url = url {
-                        DispatchQueue.main.async {
-                            collectedURLs.append(url)
-                        }
-                    }
-                    group.leave()
-                }
-            } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) || provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
                 group.enter()
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     if let url = url {
@@ -105,8 +68,20 @@ public class DragDropManager: ObservableObject {
         }
 
         group.notify(queue: .main) {
+            if Self.isInternalDrop(dragged: self.draggedItems, dropped: collectedURLs, hadProviders: !externalProviders.isEmpty) {
+                let items = self.draggedItems
+                let srcRemote = self.sourceIsRemote
+                let srcConn = self.sourceConnection
+                let srcPwd = self.sourceRemotePassword
+                self.endDrag()
+                self.executeTransfer(items: items, sourceIsRemote: srcRemote, sourceConn: srcConn, sourcePwd: srcPwd,
+                                     targetPane: targetPane, targetSubfolder: targetSubfolder, completion: completion)
+                return
+            }
+            self.endDrag()   // whatever was cached belonged to a drag that ended elsewhere
             guard !collectedURLs.isEmpty else { return }
-            let items = collectedURLs.map { FileItem(url: $0) }
+            let items = collectedURLs.filter { $0.isFileURL }.map { FileItem(url: $0) }
+            guard !items.isEmpty else { return }
             self.executeTransfer(
                 items: items,
                 sourceIsRemote: false,
@@ -117,6 +92,14 @@ public class DragDropManager: ObservableObject {
                 completion: completion
             )
         }
+    }
+
+    /// An internal drop is one whose dropped URLs are the items we started dragging.
+    static func isInternalDrop(dragged: [FileItem], dropped: [URL], hadProviders: Bool) -> Bool {
+        guard !dragged.isEmpty else { return false }
+        guard hadProviders else { return true }
+        let ours = Set(dragged.map { $0.url.absoluteString })
+        return dropped.contains { ours.contains($0.absoluteString) }
     }
 
     private func executeTransfer(

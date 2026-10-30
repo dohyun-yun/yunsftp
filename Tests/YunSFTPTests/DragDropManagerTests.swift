@@ -52,15 +52,14 @@ final class DragDropManagerTests: XCTestCase {
     }
 }
 
+
 extension DragDropManagerTests {
-    @MainActor
-    func testResigningActiveClearsInternalDragState() async throws {
-        let manager = DragDropManager()
-        let pane = PaneModel(initialURL: FileManager.default.temporaryDirectory, autoLoad: false)
-        manager.startDrag(items: [FileItem(url: URL(fileURLWithPath: "/tmp/x"))], from: pane)
-        XCTAssertFalse(manager.draggedItems.isEmpty)
-        NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: nil)
-        try await Task.sleep(nanoseconds: 100_000_000)
-        XCTAssertTrue(manager.draggedItems.isEmpty)
+    func testInternalDropIsRecognisedByMatchingURLs() {
+        let local = FileItem(url: URL(fileURLWithPath: "/tmp/a.txt"))
+        let remote = FileItem(virtualURL: URL(string: "sftp://h:22/r.txt")!, name: "r.txt", isDirectory: false, size: 1, modificationDate: Date(), permissions: "")
+        XCTAssertTrue(DragDropManager.isInternalDrop(dragged: [local], dropped: [URL(fileURLWithPath: "/tmp/a.txt")], hadProviders: true))
+        XCTAssertTrue(DragDropManager.isInternalDrop(dragged: [remote], dropped: [URL(string: "sftp://h:22/r.txt")!], hadProviders: true))
+        XCTAssertFalse(DragDropManager.isInternalDrop(dragged: [remote], dropped: [URL(fileURLWithPath: "/Users/me/photo.jpg")], hadProviders: true), "stale state from a drag that ended in Finder")
+        XCTAssertFalse(DragDropManager.isInternalDrop(dragged: [], dropped: [URL(fileURLWithPath: "/x")], hadProviders: true))
     }
 }

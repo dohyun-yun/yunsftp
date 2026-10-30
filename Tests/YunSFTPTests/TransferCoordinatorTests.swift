@@ -164,18 +164,26 @@ extension TransferCoordinatorTests {
 }
 
 extension TransferCoordinatorTests {
-    func testReplaceOntoItselfFailsWithoutDeletingTheSource() async throws {
+    func testReplaceOntoItselfFailsWithoutDeletingTheSourceEvenThroughSymlinks() async throws {
         let f = local.appendingPathComponent("same.txt")
         try write("keep me", f)
+        let link = base.appendingPathComponent("local-link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: local)
         coordinator.conflictResolver = { _, _ in ConflictDecision(.replace) }
-        await run(TransferRequest(items: [FileItem(url: f)], source: .local(local), destination: .local(local), mode: .copy))
+        await run(TransferRequest(items: [FileItem(url: f)], source: .local(local), destination: .local(link), mode: .copy))
         XCTAssertEqual(try read(f), "keep me")
         XCTAssertTrue(manager.transfers.first?.state.isFailed ?? false)
+
+        // Keep Both in the same folder is the normal "paste a copy" and must still work.
+        coordinator.conflictResolver = { _, _ in ConflictDecision(.keepBoth) }
+        await run(TransferRequest(items: [FileItem(url: f)], source: .local(local), destination: .local(local), mode: .copy))
+        XCTAssertEqual(try read(local.appendingPathComponent("same 2.txt")), "keep me")
 
         // Remote → same remote folder, same connection, move with replace: nothing is removed.
         try write("remote keep", remote.appendingPathComponent("r.txt"))
         let item = FileItem(virtualURL: SFTPService.sftpURL(host: conn.host, port: conn.port, path: remote.appendingPathComponent("r.txt").path), name: "r.txt", isDirectory: false, size: 1, modificationDate: Date(), permissions: "")
-        await run(TransferRequest(items: [item], source: .remote(conn, password: nil, path: remote.path), destination: .remote(conn, password: nil, path: remote.path), mode: .move))
+        var duplicateConn = conn!; duplicateConn.id = UUID()   // same server through another saved connection
+        await run(TransferRequest(items: [item], source: .remote(conn, password: nil, path: remote.path), destination: .remote(duplicateConn, password: nil, path: remote.path), mode: .move))
         XCTAssertEqual(try read(remote.appendingPathComponent("r.txt")), "remote keep")
     }
 

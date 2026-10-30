@@ -151,8 +151,7 @@ public final class TransferCoordinator {
         guard let request = retryRequests[taskID],
               let state = manager.transfers.first(where: { $0.id == taskID })?.state,
               state.isFailed || state == .cancelled else { return nil }
-        manager.remove(id: taskID)
-        retryRequests[taskID] = nil
+        manager.remove(id: taskID)          // rowsRemovedHandler drops the retry entry
         return start(request, onFinished: onFinished)
     }
 
@@ -181,7 +180,8 @@ public final class TransferCoordinator {
             let taskID = manager.addTransfer(fileName: name, direction: request.direction, totalBytes: item.size, batchID: batchID)
             retryRequests[taskID] = TransferRequest(items: [item], source: request.source, destination: request.destination, mode: request.mode, conflictPolicy: request.conflictPolicy)
             do {
-                if Self.isSamePlace(item: item, name: name, request: request) {
+                let samePlace = Self.isSamePlace(item: item, name: name, request: request)
+                if samePlace && request.mode == .move {
                     throw NSError(domain: "TransferCoordinator", code: 1, userInfo: [NSLocalizedDescriptionKey: L("\"%@\" is already in that folder.", name)])
                 }
                 var overwrite = false
@@ -202,7 +202,12 @@ public final class TransferCoordinator {
                         manager.markSkipped(id: taskID)
                         cancel(batch: batchID)
                         return
-                    case .replace: overwrite = true
+                    case .replace:
+                        // Replacing a file with itself would delete it; Keep Both is the only safe copy here.
+                        if samePlace {
+                            throw NSError(domain: "TransferCoordinator", code: 1, userInfo: [NSLocalizedDescriptionKey: L("\"%@\" is already in that folder.", name)])
+                        }
+                        overwrite = true
                     case .keepBoth: overwrite = false
                     }
                 }
@@ -224,13 +229,23 @@ public final class TransferCoordinator {
     }
 
     /// True when the item already lives in the destination folder (copying a file onto itself).
+    /// Local folders are compared by file-system identity (symlinks, case-insensitive volumes);
+    /// servers by host, port and user, since two saved connections may point at one server.
     static func isSamePlace(item: FileItem, name: String, request: TransferRequest) -> Bool {
         switch (request.source, request.destination) {
         case (.local, .local(let dir)):
-            return item.url.standardizedFileURL.deletingLastPathComponent() == dir.standardizedFileURL
+            // Resolve links first: the resource identifier of a symlink URL is the link's own.
+            let a = item.url.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL
+            let b = dir.resolvingSymlinksInPath().standardizedFileURL
+            if let ia = try? a.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier,
+               let ib = try? b.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier {
+                return ia.isEqual(ib)
+            }
+            return a.path.caseInsensitiveCompare(b.path) == .orderedSame
         case (.remote(let src, _, _), .remote(let dst, _, let dir)):
             let parent = (SFTPService.normalizeRemotePath(item.url.path) as NSString).deletingLastPathComponent
-            return src.id == dst.id && SFTPService.normalizeRemotePath(parent.isEmpty ? "/" : parent) == SFTPService.normalizeRemotePath(dir)
+            let sameServer = src.host.caseInsensitiveCompare(dst.host) == .orderedSame && src.port == dst.port && src.username == dst.username
+            return sameServer && SFTPService.normalizeRemotePath(parent.isEmpty ? "/" : parent) == SFTPService.normalizeRemotePath(dir)
         default:
             return false
         }

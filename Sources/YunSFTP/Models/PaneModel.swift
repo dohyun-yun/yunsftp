@@ -62,6 +62,8 @@ public class PaneModel: ObservableObject, Identifiable {
     private var lastRemotePassword: String? = nil
 
     private var history: [URL] = []
+    /// Connection id per history entry (nil for local), so Back/Forward re-enter the right server.
+    private var historyConnections: [UUID?] = []
     private var historyIndex: Int = -1
 
     public var canGoBack: Bool {
@@ -140,9 +142,15 @@ public class PaneModel: ObservableObject, Identifiable {
     private func appendHistory(_ url: URL) {
         if historyIndex >= 0 && historyIndex < history.count - 1 {
             history.removeSubrange((historyIndex + 1)..<history.count)
+            historyConnections.removeSubrange((historyIndex + 1)..<historyConnections.count)
         }
         history.append(url)
+        historyConnections.append(url.scheme == "sftp" ? remoteConnection?.id : nil)
         historyIndex = history.count - 1
+    }
+
+    private func connectionID(forHistoryIndex index: Int) -> UUID? {
+        historyConnections.indices.contains(index) ? historyConnections[index] : nil
     }
 
     public func navigateToRemote(path: String, addToHistory: Bool = true) {
@@ -168,14 +176,21 @@ public class PaneModel: ObservableObject, Identifiable {
         loadItems()
     }
 
-    public func navigateTo(_ url: URL, addToHistory: Bool = true) {
+    /// Returns false when the destination cannot be shown (e.g. a server session that is gone).
+    @discardableResult
+    public func navigateTo(_ url: URL, connectionID: UUID? = nil, addToHistory: Bool = true) -> Bool {
         // The destination's scheme decides the mode. A sidebar favourite or a history entry is a
         // file URL even while the pane shows a server, and must switch the pane back to local.
         if url.scheme == "sftp" {
-            let matches = { (c: RemoteConnection?) -> Bool in c.map { $0.host == url.host && (url.port ?? 22) == $0.port } ?? false }
+            // History entries carry the exact connection; other callers are matched by host/port.
+            let matches = { (c: RemoteConnection?) -> Bool in
+                guard let c else { return false }
+                if let connectionID { return c.id == connectionID }
+                return c.host == url.host && (url.port ?? 22) == c.port
+            }
             if !(isRemote && matches(remoteConnection)) {
                 // Not the server we are on: re-enter the previous session if it is that one, else ignore.
-                guard matches(lastRemoteConnection), let conn = lastRemoteConnection else { return }
+                guard matches(lastRemoteConnection), let conn = lastRemoteConnection else { return false }
                 let previous = isRemote ? remoteConnection : nil
                 let previousPassword = remotePassword
                 isRemote = true
@@ -185,17 +200,17 @@ public class PaneModel: ObservableObject, Identifiable {
             }
             let path = url.path.isEmpty ? "/" : url.path
             navigateToRemote(path: path.precomposedStringWithCanonicalMapping, addToHistory: addToHistory)
-            return
+            return true
         }
-        guard url.isFileURL else { return }
-        if isRemote {
-            leaveRemoteMode()
-        }
+        guard url.isFileURL else { return false }
 
         let targetURL = url.standardized
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: targetURL.path, isDirectory: &isDir), isDir.boolValue else {
-            return
+            return false
+        }
+        if isRemote {
+            leaveRemoteMode()
         }
 
         self.currentURL = targetURL
@@ -210,20 +225,23 @@ public class PaneModel: ObservableObject, Identifiable {
         }
 
         loadItems()
+        return true
     }
 
     public func goBack() {
         guard canGoBack else { return }
-        historyIndex -= 1
-        let prevURL = history[historyIndex]
-        navigateTo(prevURL, addToHistory: false)
+        let target = historyIndex - 1
+        if navigateTo(history[target], connectionID: connectionID(forHistoryIndex: target), addToHistory: false) {
+            historyIndex = target
+        }
     }
 
     public func goForward() {
         guard canGoForward else { return }
-        historyIndex += 1
-        let nextURL = history[historyIndex]
-        navigateTo(nextURL, addToHistory: false)
+        let target = historyIndex + 1
+        if navigateTo(history[target], connectionID: connectionID(forHistoryIndex: target), addToHistory: false) {
+            historyIndex = target
+        }
     }
 
     public func goUp() {

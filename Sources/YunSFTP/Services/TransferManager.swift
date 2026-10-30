@@ -201,8 +201,12 @@ public class TransferManager: ObservableObject {
     }
 
     public func clearCompleted() {
-        let gone = transfers.filter { $0.state == .completed || $0.state == .cancelled || $0.state.isFailed }.map(\.id)
-        transfers.removeAll { gone.contains($0.id) }
+        var gone: [UUID] = []
+        transfers.removeAll { item in
+            let finished = item.state == .completed || item.state == .cancelled || item.state.isFailed
+            if finished { gone.append(item.id) }
+            return finished
+        }
         rowsRemovedHandler?(gone)
         updateCurrentTransfer()
         if transfers.isEmpty {

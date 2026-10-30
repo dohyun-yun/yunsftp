@@ -70,7 +70,9 @@ public final class RemoteEditService: ObservableObject {
     /// One poll: a changed modification date marks the session pending; the next poll with a
     /// stable date uploads (editors write in several steps, this avoids racing them).
     public func tick() async {
-        for index in sessions.indices {
+        // Iterate by id: a session may be stopped while an earlier one is awaiting its upload.
+        for id in sessions.map(\.id) {
+            guard let index = sessions.firstIndex(where: { $0.id == id }) else { continue }
             let session = sessions[index]
             guard let mtime = Self.modificationDate(of: session.localURL) else { continue }
             if mtime != session.lastSeenModification {
@@ -92,8 +94,12 @@ public final class RemoteEditService: ObservableObject {
         }
         await coordinator.wait(for: batch)
         if let i = sessions.firstIndex(where: { $0.id == sessionID }) {
-            let row = TransferManager.shared.transfers.last { $0.direction == .upload && $0.fileName == session.fileName }
-            if let row, row.state.isFailed { sessions[i].lastError = row.statusMessage } else { sessions[i].uploadCount += 1; sessions[i].lastError = nil }
+            if case .failed(let message)? = coordinator.state(ofBatch: batch) {
+                sessions[i].lastError = message
+            } else {
+                sessions[i].uploadCount += 1
+                sessions[i].lastError = nil
+            }
         }
     }
 

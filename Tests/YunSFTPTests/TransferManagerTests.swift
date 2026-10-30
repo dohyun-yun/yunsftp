@@ -128,3 +128,22 @@ extension TransferManagerTests {
         XCTAssertEqual(tm.transfers.first?.fileName, "f4")
     }
 }
+
+extension TransferManagerTests {
+    @MainActor
+    func testDismissHidesBannerWithoutTouchingHistoryAndOldRowsDoNotResurface() {
+        let tm = TransferManager()
+        let old = tm.addTransfer(fileName: "old.zip", direction: .download, totalBytes: 1)
+        tm.markCompleted(id: old)
+        tm.hideBanner()
+        XCTAssertFalse(tm.isVisible)
+        XCTAssertEqual(tm.transfers.count, 1, "Dismiss keeps history")
+
+        // Removing an unrelated row while nothing is active must not bring the banner back.
+        let gone = tm.addTransfer(fileName: "x", direction: .upload, totalBytes: 1)
+        tm.markFailed(id: gone, error: "boom")
+        tm.hideBanner()
+        tm.remove(id: gone)
+        XCTAssertFalse(tm.isVisible)
+    }
+}

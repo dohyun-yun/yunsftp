@@ -51,3 +51,16 @@ final class DragDropManagerTests: XCTestCase {
         manager.endDrag()
     }
 }
+
+extension DragDropManagerTests {
+    @MainActor
+    func testResigningActiveClearsInternalDragState() async throws {
+        let manager = DragDropManager()
+        let pane = PaneModel(initialURL: FileManager.default.temporaryDirectory, autoLoad: false)
+        manager.startDrag(items: [FileItem(url: URL(fileURLWithPath: "/tmp/x"))], from: pane)
+        XCTAssertFalse(manager.draggedItems.isEmpty)
+        NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: nil)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertTrue(manager.draggedItems.isEmpty)
+    }
+}

@@ -98,6 +98,7 @@ public final class TransferCoordinator {
     public init(manager: TransferManager) {
         self.manager = manager
         manager.batchCancelHandler = { [weak self] batch in self?.cancel(batch: batch) }
+        manager.rowsRemovedHandler = { [weak self] ids in for id in ids { self?.retryRequests[id] = nil } }
     }
 
     public var activeBatchIDs: Set<UUID> { Set(batches.keys) }
@@ -139,6 +140,11 @@ public final class TransferCoordinator {
 
     public func canRetry(taskID: UUID) -> Bool { retryRequests[taskID] != nil }
 
+    /// State of the (single) row a batch produced; nil when the row is gone.
+    public func state(ofBatch batch: UUID) -> TransferState? {
+        manager.transfers.last { $0.batchID == batch }?.state
+    }
+
     /// Re-runs a failed or cancelled row as a new one-item batch.
     @discardableResult
     public func retry(taskID: UUID, onFinished: @escaping @MainActor () -> Void = {}) -> UUID? {
@@ -175,6 +181,9 @@ public final class TransferCoordinator {
             let taskID = manager.addTransfer(fileName: name, direction: request.direction, totalBytes: item.size, batchID: batchID)
             retryRequests[taskID] = TransferRequest(items: [item], source: request.source, destination: request.destination, mode: request.mode, conflictPolicy: request.conflictPolicy)
             do {
+                if Self.isSamePlace(item: item, name: name, request: request) {
+                    throw NSError(domain: "TransferCoordinator", code: 1, userInfo: [NSLocalizedDescriptionKey: L("\"%@\" is already in that folder.", name)])
+                }
                 var overwrite = false
                 if try await destinationExists(name: name, at: request.destination) {
                     let choice: ConflictChoice
@@ -211,6 +220,19 @@ public final class TransferCoordinator {
             manager.cancelTransfer(id: taskID)
         } else {
             manager.markFailed(id: taskID, error: error.localizedDescription)
+        }
+    }
+
+    /// True when the item already lives in the destination folder (copying a file onto itself).
+    static func isSamePlace(item: FileItem, name: String, request: TransferRequest) -> Bool {
+        switch (request.source, request.destination) {
+        case (.local, .local(let dir)):
+            return item.url.standardizedFileURL.deletingLastPathComponent() == dir.standardizedFileURL
+        case (.remote(let src, _, _), .remote(let dst, _, let dir)):
+            let parent = (SFTPService.normalizeRemotePath(item.url.path) as NSString).deletingLastPathComponent
+            return src.id == dst.id && SFTPService.normalizeRemotePath(parent.isEmpty ? "/" : parent) == SFTPService.normalizeRemotePath(dir)
+        default:
+            return false
         }
     }
 

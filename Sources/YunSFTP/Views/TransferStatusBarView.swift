@@ -37,7 +37,7 @@ public struct TransferStatusBarView: View {
 
                         showAllButton
                         Button(L("Dismiss")) {
-                            transferManager.clearCompleted()
+                            transferManager.hideBanner()
                         }
                         .controlSize(.small)
                         .buttonStyle(.bordered)
@@ -69,7 +69,7 @@ public struct TransferStatusBarView: View {
                             .tint(.green)
                             .frame(maxWidth: 160)
 
-                        Button(action: { transferManager.clearCompleted() }) {
+                        Button(action: { transferManager.hideBanner() }) {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.body)
                                 .foregroundColor(.secondary)
@@ -93,7 +93,7 @@ public struct TransferStatusBarView: View {
                         Spacer()
 
                         Button(L("Dismiss")) {
-                            transferManager.clearCompleted()
+                            transferManager.hideBanner()
                         }
                         .controlSize(.small)
                         .buttonStyle(.bordered)

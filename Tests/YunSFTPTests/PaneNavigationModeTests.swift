@@ -61,3 +61,16 @@ final class PaneNavigationModeTests: XCTestCase {
         XCTAssertEqual(pane.currentURL, before)
     }
 }
+
+extension PaneNavigationModeTests {
+    func testRemoteURLOfAnotherServerIsNotAppliedToTheCurrentSession() {
+        let pane = PaneModel(initialURL: FileManager.default.temporaryDirectory, autoLoad: false)
+        let a = RemoteConnection(name: "A", host: "a.example", port: 22)
+        pane.isRemote = true
+        pane.remoteConnection = a
+        pane.remotePath = "/data"
+        pane.navigateTo(SFTPService.sftpURL(host: "b.example", port: 22, path: "/other"))
+        XCTAssertEqual(pane.remoteConnection?.id, a.id)
+        XCTAssertEqual(pane.remotePath, "/data", "a history entry from another server is ignored")
+    }
+}

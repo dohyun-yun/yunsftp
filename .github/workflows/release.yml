@@ -10,6 +10,13 @@ permissions:
 jobs:
   release:
     runs-on: macos-15
+    # Secrets are read here once; step-level `if:` may only test `env`, never `secrets`.
+    env:
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+      NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+      NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,16 +31,13 @@ jobs:
 
       # Optional: Developer ID signing. Runs only when the secrets are configured.
       - name: Import signing certificate
-        if: ${{ env.CERT_P12 != '' }}
-        env:
-          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
-          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        if: ${{ env.MACOS_CERT_P12 != '' }}
         run: |
-          echo "$CERT_P12" | base64 --decode > cert.p12
+          echo "$MACOS_CERT_P12" | base64 --decode > cert.p12
           security create-keychain -p ci build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p ci build.keychain
-          security import cert.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security import cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain
           echo "SIGN_IDENTITY=$(security find-identity -v -p codesigning build.keychain | awk -F'"' 'NR==1{print $2}')" >> "$GITHUB_ENV"
 
@@ -43,15 +47,11 @@ jobs:
         run: ./scripts/package_release.sh
 
       - name: Notarize
-        if: ${{ env.SIGN_IDENTITY != '' && secrets.NOTARY_KEY_ID != '' }}
-        env:
-          NOTARY_KEY: ${{ secrets.NOTARY_KEY_P8 }}
-          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
-          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER_ID }}
+        if: ${{ env.SIGN_IDENTITY != '' && env.NOTARY_KEY_ID != '' }}
         run: |
-          echo "$NOTARY_KEY" > notary.p8
+          echo "$NOTARY_KEY_P8" > notary.p8
           DMG=$(ls build/yunsftp-*.dmg)
-          xcrun notarytool submit "$DMG" --key notary.p8 --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" --wait
+          xcrun notarytool submit "$DMG" --key notary.p8 --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
           xcrun stapler staple "$DMG"
           (cd build && shasum -a 256 yunsftp-*.dmg yunsftp-*.zip > checksums.txt)
 

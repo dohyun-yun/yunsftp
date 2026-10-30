@@ -76,6 +76,12 @@ public final class ProcessRegistry: @unchecked Sendable {
         return terminated.remove(ObjectIdentifier(p)) != nil
     }
 
+    /// Signals one specific child and remembers that we did.
+    func terminate(_ p: Process) {
+        lock.lock(); terminated.insert(ObjectIdentifier(p)); lock.unlock()
+        if p.isRunning { p.terminate() }
+    }
+
     /// Sends SIGTERM to the running transfer children of one batch. Returns how many were signalled.
     @discardableResult
     public func terminate(batch: UUID) -> Int {
@@ -840,6 +846,11 @@ public actor SFTPService {
                     }
                     ProcessRegistry.shared.register(process, isTransfer: isTransfer, batch: Self.currentBatch)
                     try process.run()
+                    // A cancel that landed between the check above and run() found nothing to
+                    // signal; deliver it now so the child is stopped and classified as cancelled.
+                    if isTransfer && Task.isCancelled {
+                        ProcessRegistry.shared.terminate(process)
+                    }
                     if let input = inputData {
                         stdinPipe.fileHandleForWriting.write(input)
                     }

@@ -23,6 +23,8 @@ public struct ToolbarView: CustomizableToolbarContent {
     public static let secondaryItemIDs = ["dualPane", "refresh", "permissions", "batchRename", "sync", "terminal", "info"]
 
     public var body: some CustomizableToolbarContent {
+        // Grouped: ToolbarContentBuilder accepts at most 10 children on Swift 6.0 toolchains.
+        Group {
         ToolbarItem(id: "connect") {
             Button(action: onConnect) { Label(L("Connect"), systemImage: "network") }
                 .help(L("Connect to Server (Cmd+K)"))
@@ -67,7 +69,10 @@ public struct ToolbarView: CustomizableToolbarContent {
             .help(L("More actions"))
         }
 
+        }
+
         // Optional items: hidden until the user adds them via View > Customize Toolbar.
+        Group {
         ToolbarItem(id: "dualPane", showsByDefault: false) {
             Button(action: onToggleDualPane) {
                 Label(L("Dual Pane"), systemImage: isDualPane ? "rectangle.split.2x1" : "rectangle")
@@ -97,6 +102,7 @@ public struct ToolbarView: CustomizableToolbarContent {
         ToolbarItem(id: "info", showsByDefault: false) {
             Button(action: onGetInfo) { Label(L("Info"), systemImage: "info.circle") }
                 .help(L("Get Info (Cmd+I)"))
+        }
         }
     }
 }

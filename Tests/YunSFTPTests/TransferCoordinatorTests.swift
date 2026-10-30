@@ -162,3 +162,30 @@ extension TransferCoordinatorTests {
         XCTAssertTrue(manager.transfers.isEmpty)
     }
 }
+
+extension TransferCoordinatorTests {
+    func testReplaceOntoItselfFailsWithoutDeletingTheSource() async throws {
+        let f = local.appendingPathComponent("same.txt")
+        try write("keep me", f)
+        coordinator.conflictResolver = { _, _ in ConflictDecision(.replace) }
+        await run(TransferRequest(items: [FileItem(url: f)], source: .local(local), destination: .local(local), mode: .copy))
+        XCTAssertEqual(try read(f), "keep me")
+        XCTAssertTrue(manager.transfers.first?.state.isFailed ?? false)
+
+        // Remote → same remote folder, same connection, move with replace: nothing is removed.
+        try write("remote keep", remote.appendingPathComponent("r.txt"))
+        let item = FileItem(virtualURL: SFTPService.sftpURL(host: conn.host, port: conn.port, path: remote.appendingPathComponent("r.txt").path), name: "r.txt", isDirectory: false, size: 1, modificationDate: Date(), permissions: "")
+        await run(TransferRequest(items: [item], source: .remote(conn, password: nil, path: remote.path), destination: .remote(conn, password: nil, path: remote.path), mode: .move))
+        XCTAssertEqual(try read(remote.appendingPathComponent("r.txt")), "remote keep")
+    }
+
+    func testRetryDataIsDroppedWhenRowsAreCleared() async throws {
+        let src = base.appendingPathComponent("src"); try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
+        try write("v", src.appendingPathComponent("p.txt"))
+        await run(TransferRequest(items: [FileItem(url: src.appendingPathComponent("p.txt"))], source: .local(src), destination: .local(local.appendingPathComponent("missing")), mode: .copy))
+        let id = try XCTUnwrap(manager.transfers.first?.id)
+        XCTAssertTrue(coordinator.canRetry(taskID: id))
+        manager.clearCompleted()
+        XCTAssertFalse(coordinator.canRetry(taskID: id))
+    }
+}

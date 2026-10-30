@@ -91,6 +91,10 @@ public class PaneModel: ObservableObject, Identifiable {
     }
 
     public func connectRemote(connection: RemoteConnection, password: String? = nil) {
+        if isRemote, let previous = remoteConnection, previous.id != connection.id {
+            lastRemoteConnection = previous      // so Back can return to the previous server
+            lastRemotePassword = remotePassword
+        }
         self.isRemote = true
         self.remoteConnection = connection
         self.remotePassword = password ?? (connection.authType == .password ? KeychainService.shared.loadPassword(for: connection) : nil)
@@ -168,12 +172,16 @@ public class PaneModel: ObservableObject, Identifiable {
         // The destination's scheme decides the mode. A sidebar favourite or a history entry is a
         // file URL even while the pane shows a server, and must switch the pane back to local.
         if url.scheme == "sftp" {
-            if !isRemote {
-                guard let conn = lastRemoteConnection,
-                      conn.host == url.host, (url.port ?? 22) == conn.port else { return }
+            let matches = { (c: RemoteConnection?) -> Bool in c.map { $0.host == url.host && (url.port ?? 22) == $0.port } ?? false }
+            if !(isRemote && matches(remoteConnection)) {
+                // Not the server we are on: re-enter the previous session if it is that one, else ignore.
+                guard matches(lastRemoteConnection), let conn = lastRemoteConnection else { return }
+                let previous = isRemote ? remoteConnection : nil
+                let previousPassword = remotePassword
                 isRemote = true
                 remoteConnection = conn
                 remotePassword = lastRemotePassword
+                if let previous { lastRemoteConnection = previous; lastRemotePassword = previousPassword }
             }
             let path = url.path.isEmpty ? "/" : url.path
             navigateToRemote(path: path.precomposedStringWithCanonicalMapping, addToHistory: addToHistory)

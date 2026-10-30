@@ -40,3 +40,12 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertEqual(UpdateChecker(defaults: d).skippedVersion, "v1.2.0")
     }
 }
+
+extension UpdateCheckerTests {
+    func testNon2xxResponsesAreErrorsNotUpToDate() throws {
+        let url = UpdateChecker.releasesAPI
+        XCTAssertNoThrow(try UpdateChecker.validate(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!))
+        XCTAssertThrowsError(try UpdateChecker.validate(HTTPURLResponse(url: url, statusCode: 403, httpVersion: nil, headerFields: nil)!))
+        XCTAssertThrowsError(try UpdateChecker.validate(HTTPURLResponse(url: url, statusCode: 503, httpVersion: nil, headerFields: nil)!))
+    }
+}

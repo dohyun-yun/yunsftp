@@ -76,6 +76,8 @@ public class TransferManager: ObservableObject {
 
     /// Installed by `TransferCoordinator`; cancelling an item cancels its whole batch.
     public var batchCancelHandler: ((UUID) -> Void)?
+    /// Installed by `TransferCoordinator`; lets it drop retry data for rows that no longer exist.
+    public var rowsRemovedHandler: (([UUID]) -> Void)?
 
     public init() {}
 
@@ -199,7 +201,9 @@ public class TransferManager: ObservableObject {
     }
 
     public func clearCompleted() {
-        transfers.removeAll { $0.state == .completed || $0.state == .cancelled || $0.state.isFailed }
+        let gone = transfers.filter { $0.state == .completed || $0.state == .cancelled || $0.state.isFailed }.map(\.id)
+        transfers.removeAll { gone.contains($0.id) }
+        rowsRemovedHandler?(gone)
         updateCurrentTransfer()
         if transfers.isEmpty {
             withAnimation {
@@ -210,7 +214,13 @@ public class TransferManager: ObservableObject {
 
     public func remove(id: UUID) {
         transfers.removeAll { $0.id == id }
+        rowsRemovedHandler?([id])
         updateCurrentTransfer()
+    }
+
+    /// Banner "Dismiss": hides the banner only; rows stay for the Transfers window.
+    public func hideBanner() {
+        withAnimation { isVisible = false }
     }
 
     /// Finished rows stay for the Transfers window; only the oldest are dropped past this size.
@@ -219,11 +229,14 @@ public class TransferManager: ObservableObject {
     private func trimHistory() {
         var finished = transfers.filter { $0.state == .completed || $0.state == .cancelled || $0.state.isFailed }.count
         guard finished > Self.historyLimit else { return }
+        var gone: [UUID] = []
         transfers.removeAll { item in
             guard finished > Self.historyLimit, item.state == .completed || item.state == .cancelled || item.state.isFailed else { return false }
             finished -= 1
+            gone.append(item.id)
             return true
         }
+        rowsRemovedHandler?(gone)
     }
 
     private func updateCurrentTransfer() {
@@ -233,12 +246,12 @@ public class TransferManager: ObservableObject {
         } else if let queued = transfers.first(where: { $0.state == .queued }) {
             currentTransfer = queued
             isVisible = true
-        } else if let failed = transfers.last(where: { $0.state.isFailed }) {
+        } else if let failed = transfers.last(where: { $0.state.isFailed }), isVisible {
+            // Only while the banner is already showing (i.e. this is a transition), never to
+            // resurrect an hour-old row because an unrelated row was removed.
             currentTransfer = failed
-            isVisible = true
-        } else if let completed = transfers.last(where: { $0.state == .completed }) {
+        } else if let completed = transfers.last(where: { $0.state == .completed }), isVisible {
             currentTransfer = completed
-            isVisible = true
             // Auto-hide the banner after 2.0 seconds; rows stay for the Transfers window.
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
                 guard let self = self else { return }

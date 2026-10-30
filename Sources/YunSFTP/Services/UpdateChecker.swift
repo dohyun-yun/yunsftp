@@ -54,6 +54,15 @@ public final class UpdateChecker {
         return UpdateInfo(version: tag, url: url, notes: obj["body"] as? String)
     }
 
+    /// GitHub answers rate limits and outages with JSON bodies too; only 2xx may be parsed.
+    nonisolated static func validate(_ response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse else { return }
+        guard (200..<300).contains(http.statusCode) else {
+            throw NSError(domain: "UpdateChecker", code: http.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: "GitHub returned HTTP \(http.statusCode)."])
+        }
+    }
+
     public func isDue(now: Date = Date()) -> Bool {
         guard let last = defaults.object(forKey: lastCheckKey) as? Date else { return true }
         return now.timeIntervalSince(last) >= Self.interval
@@ -68,7 +77,8 @@ public final class UpdateChecker {
         var request = URLRequest(url: Self.releasesAPI)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 10
-        let (data, _) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request)
+        try Self.validate(response)
         markChecked()
         guard let info = Self.parseLatestRelease(data), Self.isNewer(info.version, than: currentVersion) else { return nil }
         return info

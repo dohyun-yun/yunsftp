@@ -1361,6 +1361,16 @@
           }
         }
       }
+    },
+    "\"%@\" is already in that folder.": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"%@\" 항목은 이미 그 폴더에 있습니다."
+          }
+        }
+      }
     }
   }
 }

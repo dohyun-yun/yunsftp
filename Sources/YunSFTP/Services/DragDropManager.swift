@@ -11,6 +11,15 @@ public class DragDropManager: ObservableObject {
     @Published public var sourceIsRemote: Bool = false
     @Published public var sourceConnection: RemoteConnection? = nil
     @Published public var sourceRemotePassword: String? = nil
+    private var resignObserver: Any?
+
+    public init() {
+        // A drag that ends in another app never produces a drop here; the app resigning active
+        // during the drop is the signal that the cached items are stale.
+        resignObserver = NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.endDrag() }
+        }
+    }
 
     public func startDrag(items: [FileItem], from pane: PaneModel) {
         self.draggedItems = items

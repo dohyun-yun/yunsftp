@@ -19,6 +19,8 @@ public enum RemoteDragProvider {
         let type = fileType(for: item)
 
         provider.registerFileRepresentation(forTypeIdentifier: type.identifier, fileOptions: [], visibility: .all) { completion in
+            // Another process is taking the drop: the internal drag state must not leak into the next drop.
+            Task { @MainActor in DragDropManager.shared.endDrag() }
             let progress = Progress(totalUnitCount: 1)
             let task = Task {
                 do {

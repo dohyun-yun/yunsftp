@@ -7,7 +7,7 @@ final class MigrationServiceTests: XCTestCase {
         XCTAssertEqual(MigrationService.importedProtocol(type: 0, port: 22), .sftp)
         XCTAssertEqual(MigrationService.importedProtocol(type: 0, port: 21), .ftp)
         // No environment-specific port numbers are special-cased
-        XCTAssertEqual(MigrationService.importedProtocol(type: 0, port: 2222), .ftp)
+        XCTAssertEqual(MigrationService.importedProtocol(type: 0, port: 10022), .ftp)
     }
 
     func testImportedConnectionNameIsDerivedFromHostOnly() {

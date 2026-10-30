@@ -119,3 +119,28 @@ extension SecurityHardeningTests {
         XCTAssertEqual(many.title, "Delete 3 items from the server?")
     }
 }
+
+extension SecurityHardeningTests {
+
+    // MARK: - Item 6: askpass helper is created atomically with owner-only permissions
+
+    func testAskpassScriptIsOwnerOnlyAndEchoesPassword() throws {
+        let password = "p@ss \"word\" $(touch /tmp/x) 한글"
+        let url = try SFTPService.writeAskpassScript(password: password)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+        XCTAssertEqual((attrs[.posixPermissions] as? NSNumber)?.intValue, 0o700)
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/sh")
+        proc.arguments = [url.path]
+        let out = Pipe()
+        proc.standardOutput = out
+        try proc.run()
+        proc.waitUntilExit()
+        let printed = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
+        XCTAssertEqual(printed, password)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: "/tmp/x"))
+    }
+}

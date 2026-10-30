@@ -607,6 +607,19 @@ public actor SFTPService {
         return try await runProcess(executable: "/usr/bin/sftp", arguments: args, inputData: inputString.data(using: .utf8), password: effectivePwd)
     }
 
+    /// Creates the SSH_ASKPASS helper in the per-user temp dir. The file is created in one
+    /// step with mode 0700 (no window where it is world-readable) and removed after the
+    /// process exits. The password is base64-wrapped only to survive shell quoting.
+    static func writeAskpassScript(password: String) throws -> URL {
+        let base64Pwd = Data(password.utf8).base64EncodedString()
+        let script = "#!/bin/sh\necho \"\(base64Pwd)\" | /usr/bin/base64 -d\n"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("askpass_\(UUID().uuidString).sh")
+        guard FileManager.default.createFile(atPath: url.path, contents: Data(script.utf8), attributes: [.posixPermissions: 0o700]) else {
+            throw NSError(domain: "SFTPService", code: 3, userInfo: [NSLocalizedDescriptionKey: "Could not create the password helper"])
+        }
+        return url
+    }
+
     private func runProcess(executable: String, arguments: [String], inputData: Data? = nil, password: String?) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
@@ -618,16 +631,9 @@ public actor SFTPService {
         environment["LC_CTYPE"] = "UTF-8"
         var tempAskPassURL: URL? = nil
 
-        // If password is provided, set up secure base64 SSH_ASKPASS script
+        // If password is provided, hand it to ssh through a one-shot SSH_ASKPASS helper
         if let pwd = password, !pwd.isEmpty {
-            let base64Pwd = Data(pwd.utf8).base64EncodedString()
-            let askpassScript = """
-            #!/bin/sh
-            echo "\(base64Pwd)" | /usr/bin/base64 -d
-            """
-            let tmpScript = FileManager.default.temporaryDirectory.appendingPathComponent("askpass_\(UUID().uuidString).sh")
-            try? askpassScript.write(to: tmpScript, atomically: true, encoding: .utf8)
-            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: tmpScript.path)
+            let tmpScript = try Self.writeAskpassScript(password: pwd)
             tempAskPassURL = tmpScript
 
             environment["SSH_ASKPASS"] = tmpScript.path

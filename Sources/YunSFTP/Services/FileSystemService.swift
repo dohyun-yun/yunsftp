@@ -64,7 +64,10 @@ public actor FileSystemService {
         }
     }
 
-    public func move(urls: [URL], to destinationDirectory: URL, overwrite: Bool = false) async throws {
+    /// Returns the final destination of each moved item (unique names applied).
+    @discardableResult
+    public func move(urls: [URL], to destinationDirectory: URL, overwrite: Bool = false) async throws -> [URL] {
+        var moved: [URL] = []
         for src in urls {
             // Avoid moving folder into itself (component-wise, so /a/b does not block /a/bc)
             if Self.isSameOrDescendant(destinationDirectory, of: src) {
@@ -79,7 +82,9 @@ public actor FileSystemService {
                 }
             }
             try fileManager.moveItem(at: src, to: dest)
+            moved.append(dest)
         }
+        return moved
     }
 
     @discardableResult
@@ -100,10 +105,21 @@ public actor FileSystemService {
         }
     }
 
-    public func moveToTrash(urls: [URL]) async throws {
+    /// Returns (original, trashed) pairs; moving the trashed URL back is the undo.
+    @discardableResult
+    public func moveToTrash(urls: [URL]) async throws -> [(original: URL, trashed: URL)] {
+        var pairs: [(URL, URL)] = []
         for url in urls {
-            try fileManager.trashItem(at: url, resultingItemURL: nil)
+            var trashed: NSURL?
+            try fileManager.trashItem(at: url, resultingItemURL: &trashed)
+            if let t = trashed as URL? { pairs.append((url, t)) }
         }
+        return pairs
+    }
+
+    /// Inverse of `moveToTrash` for one pair.
+    public func restoreFromTrash(_ pair: (original: URL, trashed: URL)) throws {
+        try fileManager.moveItem(at: pair.trashed, to: pair.original)
     }
 
     public func deletePermanently(urls: [URL]) async throws {

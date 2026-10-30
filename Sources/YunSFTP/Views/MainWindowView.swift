@@ -18,6 +18,8 @@ public struct MainWindowView: View {
         _customFavorites = State(initialValue: customFavorites ?? [])
     }
 
+    @Environment(\.undoManager) private var undoManager
+
     // Sheet states
     @State private var previewItem: FileItem? = nil
     @State private var infoItem: FileItem? = nil
@@ -96,7 +98,6 @@ public struct MainWindowView: View {
                     showConnectSheet = true
                 }
             )
-            .navigationSplitViewColumnWidth(min: 160, ideal: 190, max: 260)
             .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 340)
         } detail: {
             VStack(spacing: 0) {
@@ -201,6 +202,15 @@ public struct MainWindowView: View {
         }
         .frame(minWidth: 800, minHeight: 520)
         .onAppear {
+            let left = leftPane, right = rightPane
+            TransferCoordinator.shared.localMoveRecorder = { [undoManager] actionName, moves in
+                LocalUndo.register(undoManager, actionName: actionName) {
+                    for m in moves.reversed() {
+                        _ = try await FileSystemService.shared.move(urls: [m.to], to: m.from.deletingLastPathComponent())
+                    }
+                    await MainActor.run { left.reload(); right.reload() }
+                }
+            }
             activePaneId = leftPane.id
             if !DemoHelper.isDemoMode {
                 // Load and migrate ForkLift 2 favorites
@@ -217,7 +227,7 @@ public struct MainWindowView: View {
             FilePreviewSheet(item: item, pane: activePane)
         }
         .sheet(item: $infoItem) { item in
-            FileInfoSheet(item: item)
+            FileInfoSheet(item: item, pane: activePane)
         }
         .sheet(item: $chmodItem) { item in
             ChmodSheet(item: item) { mode, recursive in
@@ -409,7 +419,12 @@ public struct MainWindowView: View {
             Task {
                 do {
                     let newURL = try await FileSystemService.shared.rename(url: item.url, to: newName)
+                    let oldName = item.name
                     await MainActor.run {
+                        LocalUndo.register(undoManager, actionName: "Rename") {
+                            _ = try await FileSystemService.shared.rename(url: newURL, to: oldName)
+                            await MainActor.run { targetPane.reload() }
+                        }
                         targetPane.selectedItemURLs = [newURL]
                         targetPane.focusedItemURL = newURL
                         targetPane.reload()
@@ -615,8 +630,12 @@ public struct MainWindowView: View {
         guard !urls.isEmpty else { return }
         Task {
             do {
-                try await FileSystemService.shared.moveToTrash(urls: urls)
+                let pairs = try await FileSystemService.shared.moveToTrash(urls: urls)
                 await MainActor.run {
+                    LocalUndo.register(undoManager, actionName: pairs.count == 1 ? "Move to Trash" : "Move \(pairs.count) Items to Trash") {
+                        for pair in pairs { try await FileSystemService.shared.restoreFromTrash(pair) }
+                        await MainActor.run { targetPane.reload() }
+                    }
                     let deletedSet = Set(urls)
                     targetPane.items.removeAll { deletedSet.contains($0.url) }
                     targetPane.selectedItemURLs.subtract(deletedSet)

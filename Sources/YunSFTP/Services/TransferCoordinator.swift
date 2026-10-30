@@ -92,6 +92,8 @@ public final class TransferCoordinator {
     private var retryRequests: [UUID: TransferRequest] = [:]
     /// Replaceable for tests; defaults to an NSAlert.
     public var conflictResolver: ConflictResolver = ConflictAlert.present
+    /// Called after a local→local move with (from, to) so the window can register an undo.
+    public var localMoveRecorder: ((_ actionName: String, _ moves: [(from: URL, to: URL)]) -> Void)?
 
     public init(manager: TransferManager) {
         self.manager = manager
@@ -231,7 +233,8 @@ public final class TransferCoordinator {
             let monitor = monitorGrowth(of: plannedURL, expected: size, taskID: taskID, verb: request.mode == .move ? "Moving" : "Copying", name: name)
             defer { monitor.cancel() }
             if request.mode == .move {
-                try await FileSystemService.shared.move(urls: [item.url], to: destDir, overwrite: overwrite)
+                let moved = try await FileSystemService.shared.move(urls: [item.url], to: destDir, overwrite: overwrite)
+                if let to = moved.first { localMoveRecorder?("Move \(name)", [(from: item.url, to: to)]) }
             } else {
                 try await FileSystemService.shared.copy(urls: [item.url], to: destDir, overwrite: overwrite)
             }

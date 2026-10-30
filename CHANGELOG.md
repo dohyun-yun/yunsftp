@@ -31,6 +31,7 @@ All notable changes to this project are documented here. The format follows
 - Tag-triggered release workflow with optional Developer ID signing and notarization.
 - Per-connection "Allow legacy SSH algorithms" toggle (off by default) for devices that only offer SHA-1 key exchange / `ssh-rsa`.
 - CI workflow, SECURITY.md, CONTRIBUTING.md, issue and PR templates, Korean README.
+- Homebrew tap (`brew install --cask dohyun-yun/yunsftp/yunsftp`); the release workflow bumps the cask automatically.
 
 ### Changed
 - Reuse SSH sessions through `ControlMaster` (faster navigation, single login per server).
@@ -38,6 +39,7 @@ All notable changes to this project are documented here. The format follows
 - Hide protocols that are not implemented (FTP/SMB/WebDAV).
 
 ### Fixed
+- Downloads are staged in the app's temp folder and moved into place by the app itself, so the `sftp` child process never needs access to Downloads/Desktop/Documents; uploads retry from a staged copy when the child cannot read the source folder.
 - Opening a local favourite or device while connected to a server no longer treats it as a remote path; Back returns to the server session.
 - `zip` arguments are terminated with `--`; moving `/a/b` into `/a/bc` is no longer rejected.
 - Manual ForkLift 2 import no longer overwrites current view settings.

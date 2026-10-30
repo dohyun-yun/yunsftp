@@ -283,7 +283,7 @@ public final class TransferCoordinator {
         case (.remote(let conn, let pwd, _), .local(let destDir)):
             let remotePath = SFTPService.normalizeRemotePath(item.url.path)
             let plannedURL = overwrite ? destDir.appendingPathComponent(name) : FileSystemService.plannedDestinationURL(fileName: name, in: destDir)
-            let monitor = monitorGrowth(of: plannedURL, expected: size, taskID: taskID, verb: "Downloading", name: name)
+            let monitor = monitorGrowth(of: SFTPService.stagedURL(for: plannedURL), expected: size, taskID: taskID, verb: "Downloading", name: name)
             defer { monitor.cancel() }
             _ = try await SFTPService.shared.download(remotePath: remotePath, to: destDir, connection: conn, password: pwd, overwrite: overwrite)
             if request.mode == .move {

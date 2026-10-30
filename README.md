@@ -40,6 +40,18 @@
 
 ## Install in 30 seconds
 
+**Homebrew**
+
+```bash
+brew tap dohyun-yun/yunsftp
+brew trust dohyun-yun/yunsftp          # newer Homebrew asks once before loading a third-party tap
+brew install --cask yunsftp            # add --no-quarantine to skip the first-launch Gatekeeper step
+```
+
+Upgrade later with `brew upgrade --cask yunsftp`.
+
+**Manual download**
+
 1. **Download** the `.dmg` from the [latest release](https://github.com/dohyun-yun/yunsftp/releases/latest) and drag `yunsftp.app` to `/Applications`.
 2. **First launch:** releases are not notarized yet, so macOS blocks the first open. Right-click `yunsftp.app` → **Open** → **Open** once, or run:
    ```bash

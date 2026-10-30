@@ -15,6 +15,7 @@ jobs:
     env:
       HAS_CERT: ${{ secrets.MACOS_CERT_P12 != '' }}
       HAS_NOTARY: ${{ secrets.NOTARY_KEY_ID != '' }}
+      HAS_TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,3 +69,11 @@ jobs:
             build/yunsftp-*.dmg
             build/yunsftp-*.zip
             build/checksums.txt
+
+      # Bumps version/sha256 in dohyun-yun/homebrew-yunsftp. Needs a fine-grained PAT with
+      # "Contents: write" on that repository stored as TAP_GITHUB_TOKEN.
+      - name: Update Homebrew cask
+        if: ${{ env.HAS_TAP_TOKEN == 'true' }}
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: ./scripts/update_cask.sh "$GITHUB_REF_NAME"

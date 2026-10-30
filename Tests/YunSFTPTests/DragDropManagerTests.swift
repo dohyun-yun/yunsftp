@@ -76,3 +76,32 @@ extension DragDropManagerTests {
         XCTAssertTrue(manager.draggedItems.isEmpty)
     }
 }
+
+extension DragDropManagerTests {
+    @MainActor
+    func testDragStateIsClearedWhenItsProviderGoesAwayButNotForANewerDrag() async throws {
+        let manager = DragDropManager.shared
+        let pane = PaneModel(initialURL: FileManager.default.temporaryDirectory, autoLoad: false)
+        manager.startDrag(items: [FileItem(url: URL(fileURLWithPath: "/tmp/old.txt"))], from: pane)
+        var oldProvider: NSItemProvider? = manager.makeProvider(for: URL(fileURLWithPath: "/tmp/old.txt"))
+        XCTAssertNotNil(oldProvider)
+        XCTAssertEqual(manager.draggedItems.count, 1)
+
+        // The drag ended in another app: the provider is released, the stale state goes with it.
+        oldProvider = nil
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertTrue(manager.draggedItems.isEmpty)
+
+        // A newer drag must survive the late release of an older provider.
+        let first = manager.startDrag(items: [FileItem(url: URL(fileURLWithPath: "/tmp/one.txt"))], from: pane)
+        var firstProvider: NSItemProvider? = manager.makeProvider(for: URL(fileURLWithPath: "/tmp/one.txt"))
+        _ = first
+        manager.startDrag(items: [FileItem(url: URL(fileURLWithPath: "/tmp/two.txt"))], from: pane)
+        let secondProvider = manager.makeProvider(for: URL(fileURLWithPath: "/tmp/two.txt"))
+        firstProvider = nil
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(manager.draggedItems.map(\.name), ["two.txt"], "releasing the older provider must not clear the current drag")
+        _ = secondProvider
+        manager.endDrag()
+    }
+}

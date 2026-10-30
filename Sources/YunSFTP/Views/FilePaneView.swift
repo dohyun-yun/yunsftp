@@ -80,10 +80,12 @@ public struct FilePaneView: View {
                 // View Mode Toggle (List / Grid)
                 Picker("", selection: $pane.viewMode) {
                     Image(systemName: "list.bullet").tag(ViewMode.list)
+                    Image(systemName: "tablecells").tag(ViewMode.table)
                     Image(systemName: "square.grid.2x2").tag(ViewMode.grid)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 70)
+                .frame(width: 100)
+                .help(L("List, table or icon view"))
                 .onChange(of: pane.viewMode) { _ in onActivate() }
 
                 // Hidden files toggle
@@ -154,6 +156,21 @@ public struct FilePaneView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let error = pane.errorMessage, pane.items.isEmpty {
                     RemoteErrorView(error: error, pane: pane)
+                } else if pane.viewMode == .table {
+                    FileTableView(
+                        pane: pane,
+                        onActivate: onActivate,
+                        onOpenItem: onOpenItem,
+                        onShowInfo: onShowInfo,
+                        onQuickLook: onQuickLook,
+                        onRename: onRename,
+                        onChmod: onChmod,
+                        onCopyToOtherPane: onCopyToOtherPane,
+                        onMoveToOtherPane: onMoveToOtherPane,
+                        onTrashItems: onTrashItems,
+                        onCompressItems: onCompressItems,
+                        onExtractArchive: onExtractArchive
+                    )
                 } else if pane.viewMode == .list {
                     FileListView(
                         pane: pane,

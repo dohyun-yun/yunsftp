@@ -12,7 +12,7 @@ public enum RemoteDragProvider {
         return .data
     }
 
-    public static func make(item: FileItem, connection: RemoteConnection, password: String?) -> NSItemProvider {
+    public static func make(item: FileItem, connection: RemoteConnection, password: String?, session: UUID? = nil) -> NSItemProvider {
         let provider = NSItemProvider()
         provider.suggestedName = item.name
         let remotePath = SFTPService.normalizeRemotePath(item.url.path)
@@ -39,7 +39,7 @@ public enum RemoteDragProvider {
         }
         // Internal pane-to-pane drops still read the sftp URL; invisible to other processes.
         provider.registerObject(item.url as NSURL, visibility: .ownProcess)
-        DragDropManager.attachSessionMarker(to: provider)
+        DragDropManager.attachSessionMarker(to: provider, session: session)
         return provider
     }
 

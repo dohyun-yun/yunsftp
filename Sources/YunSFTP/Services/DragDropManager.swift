@@ -18,26 +18,52 @@ public class DragDropManager: ObservableObject {
     /// supplies it, so its presence on a drop is what makes the drop "internal".
     nonisolated public static let sessionMarkerType = "com.finsternis.yunsftp.drag-session"
 
-    public func startDrag(items: [FileItem], from pane: PaneModel) {
+    /// Identifies the current drag; a provider created for it keeps a token whose release (the
+    /// drag session is over, wherever it ended) clears the cached items of *this* session only.
+    public private(set) var currentSession: UUID? = nil
+
+    @discardableResult
+    public func startDrag(items: [FileItem], from pane: PaneModel) -> UUID {
+        let session = UUID()
+        self.currentSession = session
         self.draggedItems = items
         self.sourcePaneId = pane.id
         self.sourceIsRemote = pane.isRemote
         self.sourceConnection = pane.remoteConnection
         self.sourceRemotePassword = pane.remotePassword
+        return session
     }
 
     /// Provider for a local item: the file URL plus the session marker.
     public func makeProvider(for url: URL) -> NSItemProvider {
         let provider = NSItemProvider(object: url as NSURL)
-        Self.attachSessionMarker(to: provider)
+        Self.attachSessionMarker(to: provider, session: currentSession)
         return provider
     }
 
-    nonisolated public static func attachSessionMarker(to provider: NSItemProvider) {
+    /// Released together with the provider, i.e. when AppKit is done with the drag session.
+    final class SessionToken: @unchecked Sendable {
+        let session: UUID?
+        init(_ session: UUID?) { self.session = session }
+        deinit {
+            guard let session else { return }
+            Task { @MainActor in DragDropManager.shared.endDrag(session: session) }
+        }
+    }
+
+    nonisolated public static func attachSessionMarker(to provider: NSItemProvider, session: UUID? = nil) {
+        let token = SessionToken(session)
         provider.registerDataRepresentation(forTypeIdentifier: sessionMarkerType, visibility: .ownProcess) { completion in
+            _ = token      // keeps the token alive exactly as long as the provider
             completion(Data("1".utf8), nil)
             return nil
         }
+    }
+
+    /// Ends the drag only if it is still the given session (a newer drag must not be cleared).
+    public func endDrag(session: UUID) {
+        guard currentSession == session else { return }
+        endDrag()
     }
 
     nonisolated public static func isInternalDrop(providers: [NSItemProvider]) -> Bool {
@@ -45,6 +71,7 @@ public class DragDropManager: ObservableObject {
     }
 
     public func endDrag() {
+        self.currentSession = nil
         self.draggedItems = []
         self.sourcePaneId = nil
         self.sourceIsRemote = false

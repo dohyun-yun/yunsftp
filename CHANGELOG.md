@@ -5,7 +5,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+- Table view: a third pane presentation built on SwiftUI `Table` with the system header, native sorting, column resize/reorder/hide from the header context menu and native multi-selection. Switch with the view picker above the file list. In the table the keyboard focus cursor is shown as an accent bar on the row.
+- Demo mode accepts `--view list|table|grid` for documentation screenshots.
 
 ## [1.2.0] - 2026-10-31
 

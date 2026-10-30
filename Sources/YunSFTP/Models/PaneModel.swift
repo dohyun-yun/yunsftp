@@ -14,6 +14,8 @@ public enum SortField: String, CaseIterable, Identifiable, Codable, Sendable {
 public enum ViewMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case list = "List"
     case grid = "Icons"
+    /// Native SwiftUI `Table` (macOS 14+): system header, column customization, native selection.
+    case table = "Table"
 
     public var id: String { rawValue }
 }

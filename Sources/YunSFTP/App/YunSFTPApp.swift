@@ -33,6 +33,17 @@ enum DemoHelper {
         return (try? png.write(to: url)) != nil
     }
 
+    /// `--view list|table|grid` picks the pane presentation for documentation screenshots.
+    static var demoViewMode: ViewMode? {
+        guard let idx = CommandLine.arguments.firstIndex(of: "--view"), idx + 1 < CommandLine.arguments.count else { return nil }
+        switch CommandLine.arguments[idx + 1] {
+        case "table": return .table
+        case "grid": return .grid
+        case "list": return .list
+        default: return nil
+        }
+    }
+
     static var screenshotOutputPath: String? {
         if let idx = CommandLine.arguments.firstIndex(of: "--demo-screenshot"), idx + 1 < CommandLine.arguments.count {
             return CommandLine.arguments[idx + 1]
@@ -118,6 +129,7 @@ enum DemoHelper {
             FavoriteLocation(name: "Projects", url: URL(fileURLWithPath: "/Users/developer/Projects"), systemIconName: "folder")
         ]
 
+        if let mode = demoViewMode { left.viewMode = mode; right.viewMode = mode }
         return (left, right, favs)
     }
 }

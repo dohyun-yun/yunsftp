@@ -141,3 +141,6 @@
 "Native (recommended)" = "Native (recommended)";
 "OpenSSH command-line tools" = "OpenSSH command-line tools";
 "The native engine gives byte-level progress and faster operations. OpenSSH is used automatically for servers or keys it cannot handle." = "The native engine gives byte-level progress and faster operations. OpenSSH is used automatically for servers or keys it cannot handle.";
+"List, table or icon view" = "List, table or icon view";
+"Name" = "Name";
+"Perms" = "Perms";

@@ -69,7 +69,7 @@ Legend as above. Order = execution order.
 - [x] 42. Drag remote files out to Finder via file promises.
 - [x] 43. Localization: English + Korean String Catalog; `README.ko.md`.
 - [x] 44. README restructure: hero, install in 30 seconds, feature grid, trust section, FAQ, roadmap, badges; refreshed light/dark screenshots.
-- [-] 45. Native SFTP library (swift-nio-ssh) replacing the `sftp` process transport — needs a design decision with the owner.
+- [x] 45. Native SFTP engine (Citadel / swift-nio-ssh) with automatic OpenSSH fallback and an engine setting; tested end-to-end against a user-space sshd.
 - [-] 46. SwiftUI `Table` prototype for the file list — only after 27/28 land; needs a spike to confirm selection behaviour parity.
 - [-] 47. Developer ID signing + notarization — owner decided not to pursue for now (workflow supports it if secrets are ever added).
 - [x] 48. Homebrew tap `dohyun-yun/homebrew-yunsftp` with the `yunsftp` cask; release workflow bumps it when `TAP_GITHUB_TOKEN` is set.

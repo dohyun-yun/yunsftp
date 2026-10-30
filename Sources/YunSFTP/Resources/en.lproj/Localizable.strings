@@ -137,3 +137,7 @@
 "You're up to date" = "You're up to date";
 "yunsftp %@ is available" = "yunsftp %@ is available";
 "yunsftp %@ is the latest version." = "yunsftp %@ is the latest version.";
+"Transfer engine" = "Transfer engine";
+"Native (recommended)" = "Native (recommended)";
+"OpenSSH command-line tools" = "OpenSSH command-line tools";
+"The native engine gives byte-level progress and faster operations. OpenSSH is used automatically for servers or keys it cannot handle." = "The native engine gives byte-level progress and faster operations. OpenSSH is used automatically for servers or keys it cannot handle.";

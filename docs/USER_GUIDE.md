@@ -52,7 +52,7 @@ Welcome to the comprehensive user manual for **yunsftp** — the lightweight, ad
 
 ### System Requirements
 - **Hardware**: Mac with Apple Silicon (M1, M2, M3, M4, or newer).
-- **Operating System**: macOS 13.0 (Ventura) or later.
+- **Operating System**: macOS 14.0 (Sonoma) or later.
 - **Architecture**: 100% Native 64-bit ARM (`arm64`). Rosetta 2 is **not** required.
 
 ### Installation

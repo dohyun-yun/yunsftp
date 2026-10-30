@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/dohyun-yun/yunsftp/releases/latest"><strong>Download for macOS</strong></a> · macOS 13 or later · Apple Silicon
+  <a href="https://github.com/dohyun-yun/yunsftp/releases/latest"><strong>Download for macOS</strong></a> · macOS 14 or later · Apple Silicon
 </p>
 
 ## Why yunsftp
@@ -80,7 +80,7 @@ Prefer building it yourself? See [Build from source](#build-from-source).
 
 ## Security and privacy
 
-- Transfers run over the system OpenSSH (`sftp`, `ssh`, `scp`). Sessions are multiplexed, so one login serves many operations.
+- Transfers use a native SSH/SFTP engine built on [swift-nio-ssh](https://github.com/apple/swift-nio-ssh) via [Citadel](https://github.com/orlandos-nl/Citadel): one session per server, byte-level progress, no helper processes. Servers or keys it cannot handle (SHA-1-only devices, passphrase keys via `ssh-agent`) fall back to the system OpenSSH tools automatically; you can also pin either engine in Settings.
 - Host keys are checked against `~/.ssh/known_hosts` (trust on first use). A changed key stops the connection with an explanation.
 - Algorithms are OpenSSH defaults. A per-connection **Allow legacy SSH algorithms** switch exists for old devices and is off by default.
 - Passwords are stored in the macOS Keychain and handed to OpenSSH through a one-shot helper created with mode `0700`.
@@ -134,11 +134,11 @@ Only to your servers. The optional update check requests `api.github.com/repos/d
 
 ## Roadmap
 
-Progress is tracked in [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md). Next up: a native SFTP engine for true byte-level progress and resume, and a SwiftUI `Table`-based file list. Notarized builds are not planned for now; the Homebrew cask and the first-launch note above cover installation.
+Progress is tracked in [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md). Next up: a SwiftUI `Table`-based file list and resumable transfers on the native engine. Notarized builds are not planned for now; the Homebrew cask and the first-launch note above cover installation.
 
 ## Build from source
 
-Requirements: Apple Silicon Mac, Xcode 16 or later (Swift 6 toolchain). The app itself runs on macOS 13+.
+Requirements: Apple Silicon Mac, Xcode 16 or later (Swift 6 toolchain). The app itself runs on macOS 14+.
 
 ```bash
 git clone https://github.com/dohyun-yun/yunsftp.git

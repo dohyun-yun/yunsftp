@@ -285,14 +285,16 @@ public final class TransferCoordinator {
             let plannedURL = overwrite ? destDir.appendingPathComponent(name) : FileSystemService.plannedDestinationURL(fileName: name, in: destDir)
             let monitor = monitorGrowth(of: SFTPService.stagedURL(for: plannedURL), expected: size, taskID: taskID, verb: "Downloading", name: name)
             defer { monitor.cancel() }
-            _ = try await SFTPService.shared.download(remotePath: remotePath, to: destDir, connection: conn, password: pwd, overwrite: overwrite)
+            _ = try await SFTPService.shared.download(remotePath: remotePath, to: destDir, connection: conn, password: pwd, overwrite: overwrite,
+                                                      progress: progressReporter(taskID: taskID, expected: size, verb: "Downloading", name: name))
             if request.mode == .move {
                 try await SFTPService.shared.remove(remotePath: remotePath, isDirectory: item.isDirectory, connection: conn, password: pwd)
             }
 
         case (.local, .remote(let conn, let pwd, let destDir)):
-            manager.updateProgress(id: taskID, progress: 0.1, bytesTransferred: 0, totalBytes: size, message: "Uploading \(name)...")
-            try await SFTPService.shared.upload(localURL: item.url, to: destDir, connection: conn, password: pwd, overwrite: overwrite)
+            manager.updateProgress(id: taskID, progress: 0.05, bytesTransferred: 0, totalBytes: size, message: "Uploading \(name)...")
+            try await SFTPService.shared.upload(localURL: item.url, to: destDir, connection: conn, password: pwd, overwrite: overwrite,
+                                                progress: progressReporter(taskID: taskID, expected: size, verb: "Uploading", name: name))
             if request.mode == .move {
                 try await FileSystemService.shared.moveToTrash(urls: [item.url])
             }
@@ -318,6 +320,17 @@ public final class TransferCoordinator {
                 if request.mode == .move {
                     try await SFTPService.shared.remove(remotePath: srcPath, isDirectory: item.isDirectory, connection: srcConn, password: srcPwd)
                 }
+            }
+        }
+    }
+
+    /// Byte-level progress from the native engine (the OpenSSH transport never calls it).
+    private func progressReporter(taskID: UUID, expected: Int64, verb: String, name: String) -> @Sendable (Int64) -> Void {
+        let manager = self.manager
+        return { bytes in
+            Task { @MainActor in
+                let fraction = expected > 0 ? min(0.99, Double(bytes) / Double(expected)) : 0.5
+                manager.updateProgress(id: taskID, progress: fraction, bytesTransferred: bytes, totalBytes: expected, message: "\(verb) \(name)...")
             }
         }
     }

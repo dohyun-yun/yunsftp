@@ -132,7 +132,8 @@ extension SecurityHardeningTests {
     // MARK: - Item 6: askpass helper is created atomically with owner-only permissions
 
     func testAskpassScriptIsOwnerOnlyAndEchoesPassword() throws {
-        let password = "p@ss \"word\" $(touch /tmp/x) 한글"
+        let marker = FileManager.default.temporaryDirectory.appendingPathComponent("askpass_injection_\(UUID().uuidString)").path
+        let password = "p@ss \"word\" $(touch \(marker)) 한글"
         let url = try SFTPService.writeAskpassScript(password: password)
         defer { try? FileManager.default.removeItem(at: url) }
 
@@ -148,7 +149,7 @@ extension SecurityHardeningTests {
         proc.waitUntilExit()
         let printed = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
         XCTAssertEqual(printed, password)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: "/tmp/x"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: marker), "password must not be shell-expanded")
     }
 }
 

@@ -112,14 +112,8 @@ struct YunSFTPApp: App {
         .windowToolbarStyle(.unified)
         .commands {
             SidebarCommands()
-            CommandGroup(replacing: .newItem) {
-                Button("New Window") {
-                    if let win = NSApplication.shared.windows.first {
-                        win.makeKeyAndOrderFront(nil)
-                    }
-                }
-                .keyboardShortcut("n", modifiers: .command)
-            }
+            // Single-window app: drop the default File > New items instead of offering a no-op.
+            CommandGroup(replacing: .newItem) {}
         }
     }
 }

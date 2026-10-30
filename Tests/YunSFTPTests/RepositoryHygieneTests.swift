@@ -1,4 +1,5 @@
 import XCTest
+@testable import yunsftp
 
 /// Guards against third-party namespaces / pre-rename identifiers creeping back into the sources.
 final class RepositoryHygieneTests: XCTestCase {
@@ -30,5 +31,17 @@ extension RepositoryHygieneTests {
             let hits = hangul.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
             XCTAssertEqual(hits, 0, "\(url.lastPathComponent) contains Hangul strings")
         }
+    }
+}
+
+extension RepositoryHygieneTests {
+    func testOnlyImplementedProtocolsAreOffered() {
+        XCTAssertEqual(ConnectionProtocol.implemented, [.sftp])
+    }
+
+    func testNoPlaceholderNewWindowCommand() throws {
+        let app = sourcesRoot.appendingPathComponent("YunSFTP/App/YunSFTPApp.swift")
+        let text = try String(contentsOf: app, encoding: .utf8)
+        XCTAssertFalse(text.contains("\"New Window\""))
     }
 }

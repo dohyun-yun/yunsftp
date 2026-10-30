@@ -8,6 +8,9 @@ public enum ConnectionProtocol: String, CaseIterable, Identifiable, Codable, Sen
 
     public var id: String { rawValue }
 
+    /// Only SFTP has a transport today. The other cases stay for Codable compatibility.
+    public static let implemented: [ConnectionProtocol] = [.sftp]
+
     public var defaultPort: Int {
         switch self {
         case .sftp: return 22

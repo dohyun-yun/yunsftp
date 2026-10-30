@@ -40,6 +40,18 @@
 
 ## 30초 설치
 
+**Homebrew**
+
+```bash
+brew tap dohyun-yun/yunsftp
+brew trust dohyun-yun/yunsftp          # 최신 Homebrew는 서드파티 tap을 처음 쓸 때 한 번 확인합니다
+brew install --cask yunsftp            # 첫 실행 Gatekeeper 단계를 건너뛰려면 --no-quarantine 추가
+```
+
+이후 업데이트는 `brew upgrade --cask yunsftp`로 합니다.
+
+**직접 다운로드**
+
 1. [최신 릴리스](https://github.com/dohyun-yun/yunsftp/releases/latest)에서 `.dmg`를 받아 `yunsftp.app`을 `/Applications`로 드래그합니다.
 2. **첫 실행:** 아직 공증(notarization)이 되어 있지 않아 macOS가 첫 실행을 막습니다. `yunsftp.app`을 우클릭 → **열기** → **열기**를 한 번 하거나 아래 명령을 실행하세요.
    ```bash

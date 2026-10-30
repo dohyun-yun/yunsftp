@@ -115,3 +115,16 @@ final class TransferManagerTests: XCTestCase {
     }
 }
 
+
+extension TransferManagerTests {
+    @MainActor
+    func testHistoryIsCappedToTheNewestFinishedRows() {
+        let tm = TransferManager()
+        for i in 0..<(TransferManager.historyLimit + 5) {
+            let id = tm.addTransfer(fileName: "f\(i)", direction: .localCopy, totalBytes: 1)
+            tm.markCompleted(id: id)
+        }
+        XCTAssertEqual(tm.transfers.count, TransferManager.historyLimit + 1, "trim runs on add, so the newest row is kept on top of the cap")
+        XCTAssertEqual(tm.transfers.first?.fileName, "f4")
+    }
+}

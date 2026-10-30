@@ -111,6 +111,12 @@ struct YunSFTPApp: App {
             SettingsView()
         }
 
+        Window("Transfers", id: "transfers") {
+            TransfersWindowView()
+        }
+        .keyboardShortcut("t", modifiers: [.command, .shift])
+        .defaultSize(width: 620, height: 400)
+
         WindowGroup {
             if DemoHelper.isDemoMode {
                 let demo = DemoHelper.createDemoPanes()

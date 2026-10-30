@@ -88,6 +88,8 @@ public final class TransferCoordinator {
 
     private let manager: TransferManager
     private var batches: [UUID: Task<Void, Never>] = [:]
+    /// Single-item requests kept per transfer row so a failed row can be retried.
+    private var retryRequests: [UUID: TransferRequest] = [:]
     /// Replaceable for tests; defaults to an NSAlert.
     public var conflictResolver: ConflictResolver = ConflictAlert.present
 
@@ -133,6 +135,19 @@ public final class TransferCoordinator {
         return batchID
     }
 
+    public func canRetry(taskID: UUID) -> Bool { retryRequests[taskID] != nil }
+
+    /// Re-runs a failed or cancelled row as a new one-item batch.
+    @discardableResult
+    public func retry(taskID: UUID, onFinished: @escaping @MainActor () -> Void = {}) -> UUID? {
+        guard let request = retryRequests[taskID],
+              let state = manager.transfers.first(where: { $0.id == taskID })?.state,
+              state.isFailed || state == .cancelled else { return nil }
+        manager.remove(id: taskID)
+        retryRequests[taskID] = nil
+        return start(request, onFinished: onFinished)
+    }
+
     public func cancel(batch: UUID) {
         batches[batch]?.cancel()
         ProcessRegistry.shared.terminate(batch: batch)
@@ -156,6 +171,7 @@ public final class TransferCoordinator {
             if Task.isCancelled { break }
             let name = SFTPService.decodeLsEscapes(item.name).precomposedStringWithCanonicalMapping
             let taskID = manager.addTransfer(fileName: name, direction: request.direction, totalBytes: item.size, batchID: batchID)
+            retryRequests[taskID] = TransferRequest(items: [item], source: request.source, destination: request.destination, mode: request.mode, conflictPolicy: request.conflictPolicy)
             do {
                 var overwrite = false
                 if try await destinationExists(name: name, at: request.destination) {

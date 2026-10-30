@@ -104,6 +104,7 @@ public class TransferManager: ObservableObject {
         )
         item.batchID = batchID
         transfers.append(item)
+        trimHistory()
         currentTransfer = item
         isVisible = true
         return item.id
@@ -207,6 +208,24 @@ public class TransferManager: ObservableObject {
         }
     }
 
+    public func remove(id: UUID) {
+        transfers.removeAll { $0.id == id }
+        updateCurrentTransfer()
+    }
+
+    /// Finished rows stay for the Transfers window; only the oldest are dropped past this size.
+    public static let historyLimit = 200
+
+    private func trimHistory() {
+        var finished = transfers.filter { $0.state == .completed || $0.state == .cancelled || $0.state.isFailed }.count
+        guard finished > Self.historyLimit else { return }
+        transfers.removeAll { item in
+            guard finished > Self.historyLimit, item.state == .completed || item.state == .cancelled || item.state.isFailed else { return false }
+            finished -= 1
+            return true
+        }
+    }
+
     private func updateCurrentTransfer() {
         if let inProg = transfers.first(where: { $0.state == .inProgress }) {
             currentTransfer = inProg
@@ -220,13 +239,12 @@ public class TransferManager: ObservableObject {
         } else if let completed = transfers.last(where: { $0.state == .completed }) {
             currentTransfer = completed
             isVisible = true
-            // Auto-hide after 2.0 seconds if no new transfers
+            // Auto-hide the banner after 2.0 seconds; rows stay for the Transfers window.
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
                 guard let self = self else { return }
                 if !self.hasActiveTransfers {
                     withAnimation {
                         self.isVisible = false
-                        self.clearCompleted()
                     }
                 }
             }

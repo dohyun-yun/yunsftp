@@ -131,3 +131,34 @@ final class TransferCoordinatorTests: XCTestCase {
         XCTAssertEqual(TransferRequest(items: [], source: r, destination: r, mode: .move).direction, .remoteCopy)
     }
 }
+
+extension TransferCoordinatorTests {
+    func testRetryRerunsAFailedRowAfterTheCauseIsFixed() async throws {
+        let src = base.appendingPathComponent("src"); try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
+        try write("v", src.appendingPathComponent("r.txt"))
+        let missingDir = local.appendingPathComponent("not-yet")
+        await run(TransferRequest(items: [FileItem(url: src.appendingPathComponent("r.txt"))], source: .local(src), destination: .local(missingDir), mode: .copy))
+        let failed = try XCTUnwrap(manager.transfers.first)
+        XCTAssertTrue(failed.state.isFailed)
+        XCTAssertTrue(coordinator.canRetry(taskID: failed.id))
+
+        try FileManager.default.createDirectory(at: missingDir, withIntermediateDirectories: true)
+        let batch = try XCTUnwrap(coordinator.retry(taskID: failed.id))
+        await coordinator.wait(for: batch)
+        XCTAssertEqual(manager.transfers.count, 1, "the failed row is replaced by the retried one")
+        XCTAssertEqual(manager.transfers.first?.state, .completed)
+        XCTAssertEqual(try read(missingDir.appendingPathComponent("r.txt")), "v")
+        XCTAssertNil(coordinator.retry(taskID: manager.transfers[0].id), "completed rows are not retryable")
+    }
+
+    func testFinishedRowsStayForHistoryUntilCleared() async throws {
+        let src = base.appendingPathComponent("src"); try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
+        try write("v", src.appendingPathComponent("h.txt"))
+        await run(TransferRequest(items: [FileItem(url: src.appendingPathComponent("h.txt"))], source: .local(src), destination: .local(local), mode: .copy))
+        try await Task.sleep(nanoseconds: 2_300_000_000)   // past the banner auto-hide
+        XCTAssertFalse(manager.isVisible)
+        XCTAssertEqual(manager.transfers.count, 1)
+        manager.clearCompleted()
+        XCTAssertTrue(manager.transfers.isEmpty)
+    }
+}

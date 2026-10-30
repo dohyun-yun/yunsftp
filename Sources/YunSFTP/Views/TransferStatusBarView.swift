@@ -2,8 +2,16 @@ import SwiftUI
 
 public struct TransferStatusBarView: View {
     @ObservedObject var transferManager: TransferManager = .shared
+    @Environment(\.openWindow) private var openWindow
 
     public init() {}
+
+    private var showAllButton: some View {
+        Button("Show All") { openWindow(id: "transfers") }
+            .controlSize(.small)
+            .buttonStyle(.bordered)
+            .help("Open the Transfers window (Cmd+Shift+T)")
+    }
 
     public var body: some View {
         if transferManager.isVisible, let current = transferManager.currentTransfer {
@@ -27,6 +35,7 @@ public struct TransferStatusBarView: View {
 
                         Spacer()
 
+                        showAllButton
                         Button("Dismiss") {
                             transferManager.clearCompleted()
                         }
@@ -142,6 +151,7 @@ public struct TransferStatusBarView: View {
 
                         Spacer()
 
+                        showAllButton
                         Button(action: {
                             transferManager.cancelTransfer(id: current.id)
                         }) {

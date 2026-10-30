@@ -60,8 +60,8 @@ Legend as above. Order = execution order.
 - [x] 36. Edit remote file in external editor with auto-upload on save (FSEvents watch).
 - [x] 37. Undo for local rename / move / trash.
 - [x] 38. Remote path bookmarks and recent locations per connection.
-- [ ] 39. Folder size on demand in Get Info; remote recursive search.
-- [ ] 40. Update check against GitHub Releases (menu item + startup once a day, opt-out).
+- [x] 39. Folder size on demand in Get Info; remote recursive search.
+- [x] 40. Update check against GitHub Releases (menu item + startup once a day, opt-out).
 
 ## C. Bigger features
 

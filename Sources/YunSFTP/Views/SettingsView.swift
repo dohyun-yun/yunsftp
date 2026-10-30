@@ -19,6 +19,10 @@ public struct SettingsView: View {
         Form {
             Toggle("Show relative dates (Today, Yesterday)", isOn: $store.settings.showRelativeDates)
             Toggle("Ask before deleting files on a server", isOn: $store.settings.confirmRemoteDelete)
+            Toggle("Check for updates once a day", isOn: $store.settings.checkForUpdates)
+            Text("A single request to GitHub Releases. Nothing about you or your servers is sent.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Picker("Open SSH sessions in", selection: $store.settings.terminalApp) {
                 ForEach(TerminalApp.allCases) { Text($0.rawValue).tag($0) }
             }

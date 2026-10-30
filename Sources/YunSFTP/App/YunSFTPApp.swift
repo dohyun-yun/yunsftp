@@ -128,6 +128,11 @@ struct YunSFTPApp: App {
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    Task { await UpdateChecker.shared.checkInteractively() }
+                }
+            }
             ToolbarCommands()
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") { Self.openSettings() }
@@ -168,6 +173,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 for w in NSApplication.shared.windows {
                     w.makeKeyAndOrderFront(nil)
                 }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)   // let the window settle first
+                await UpdateChecker.shared.checkAtLaunchIfDue()
             }
         }
     }

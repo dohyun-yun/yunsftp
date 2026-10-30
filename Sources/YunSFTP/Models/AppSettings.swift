@@ -35,6 +35,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
     public var confirmRemoteDelete: Bool = true
     public var terminalApp: TerminalApp = .terminal
     public var legacyAlgorithmsByDefault: Bool = false
+    public var checkForUpdates: Bool = true
     public var tools: [CustomTool] = []
 
     public static let fontSizeRange: ClosedRange<Double> = 10...14
@@ -59,6 +60,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         confirmRemoteDelete = try c.decodeIfPresent(Bool.self, forKey: .confirmRemoteDelete) ?? confirmRemoteDelete
         terminalApp = try c.decodeIfPresent(TerminalApp.self, forKey: .terminalApp) ?? terminalApp
         legacyAlgorithmsByDefault = try c.decodeIfPresent(Bool.self, forKey: .legacyAlgorithmsByDefault) ?? legacyAlgorithmsByDefault
+        checkForUpdates = try c.decodeIfPresent(Bool.self, forKey: .checkForUpdates) ?? checkForUpdates
         tools = try c.decodeIfPresent([CustomTool].self, forKey: .tools) ?? tools
     }
 

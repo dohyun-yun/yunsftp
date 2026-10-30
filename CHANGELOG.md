@@ -5,6 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [1.1.0] - 2026-10-30
+
 ### Security
 - Verify SSH host keys against `~/.ssh/known_hosts` (`accept-new`) instead of disabling checks.
 - Stop enabling SHA-1 key exchange and `ssh-rsa`; use OpenSSH defaults.
@@ -50,3 +54,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [1.0.0] - 2026-10-19
 - Initial public release.
+
+[Unreleased]: https://github.com/dohyun-yun/yunsftp/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/dohyun-yun/yunsftp/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/dohyun-yun/yunsftp/releases/tag/v1.0.0

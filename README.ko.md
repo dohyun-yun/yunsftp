@@ -53,7 +53,7 @@ brew install --cask yunsftp            # 첫 실행 Gatekeeper 단계를 건너�
 **직접 다운로드**
 
 1. [최신 릴리스](https://github.com/dohyun-yun/yunsftp/releases/latest)에서 `.dmg`를 받아 `yunsftp.app`을 `/Applications`로 드래그합니다.
-2. **첫 실행:** 아직 공증(notarization)이 되어 있지 않아 macOS가 첫 실행을 막습니다. `yunsftp.app`을 우클릭 → **열기** → **열기**를 한 번 하거나 아래 명령을 실행하세요.
+2. **첫 실행:** 릴리스는 ad-hoc 서명만 되어 있어(공증 없음) macOS가 첫 실행을 막습니다. `yunsftp.app`을 우클릭 → **열기** → **열기**를 한 번 하거나 아래 명령을 실행하세요.
    ```bash
    xattr -d com.apple.quarantine /Applications/yunsftp.app
    ```
@@ -134,7 +134,7 @@ DSM의 SFTP는 활성화한 공유 폴더로 chroot됩니다. 서버가 보여 �
 
 ## 로드맵
 
-진행 상황은 [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md)에서 추적합니다. 다음 순서는 바이트 단위 진행률과 이어받기를 위한 네이티브 SFTP 엔진, 서명·공증된 릴리스와 Homebrew cask, SwiftUI `Table` 기반 파일 목록입니다.
+진행 상황은 [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md)에서 추적합니다. 다음 순서는 바이트 단위 진행률과 이어받기를 위한 네이티브 SFTP 엔진, SwiftUI `Table` 기반 파일 목록입니다. 공증은 당분간 계획에 없으며 Homebrew cask와 위의 첫 실행 안내로 설치를 안내합니다.
 
 ## 소스에서 빌드
 

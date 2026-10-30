@@ -289,7 +289,7 @@ When connecting to SFTP on a non-standard port (e.g. `2222`), `yunsftp` formats 
 
 ---
 
-## 9. What's new since 1.0
+## 9. New in 1.1
 
 - **Settings** (`⌘,`): relative dates, visible columns, font size, delete confirmation, Terminal or iTerm for SSH sessions, update check, legacy-algorithm default for new connections.
 - **Import connections** from `~/.ssh/config`, Cyberduck and ForkLift 2 (connection manager → Import…).

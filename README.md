@@ -45,10 +45,10 @@
 ```bash
 brew tap dohyun-yun/yunsftp
 brew trust dohyun-yun/yunsftp          # newer Homebrew asks once before loading a third-party tap
-brew install --cask yunsftp            # add --no-quarantine to skip the first-launch Gatekeeper step
+brew install --cask yunsftp
 ```
 
-Upgrade later with `brew upgrade --cask yunsftp`.
+Then do the first-launch step below once (Homebrew 7 no longer offers `--no-quarantine`). Upgrade later with `brew upgrade --cask yunsftp`.
 
 **Manual download**
 

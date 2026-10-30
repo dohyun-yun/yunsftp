@@ -302,3 +302,10 @@ When connecting to SFTP on a non-standard port (e.g. `2222`), `yunsftp` formats 
 - **Tabs** per pane (`⌘T`, `⌘W`, `⌘⇧[` / `⌘⇧]`).
 - **Drag to Finder**: remote files can be dropped into Finder or any other app.
 - **Korean UI** follows the system language.
+
+
+## 10. New in 1.3
+
+- **Table view**: the view picker above each pane now offers list, table and icons. The table uses the system header: click to sort, drag to resize or reorder columns, right-click the header to show or hide columns (Permissions is hidden by default). Keyboard shortcuts behave the same as in the list view.
+
+![Table view](assets/screenshot-table-light.png)

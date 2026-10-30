@@ -65,7 +65,7 @@ Legend as above. Order = execution order.
 
 ## C. Bigger features
 
-- [ ] 41. Tabs per pane (`Cmd+T`, `Cmd+W`, `Cmd+Shift+]`).
+- [x] 41. Tabs per pane (`Cmd+T`, `Cmd+W`, `Cmd+Shift+]`).
 - [ ] 42. Drag remote files out to Finder via file promises.
 - [ ] 43. Localization: English + Korean String Catalog; `README.ko.md`.
 - [x] 44. README restructure: hero, install in 30 seconds, feature grid, trust section, FAQ, roadmap, badges; refreshed light/dark screenshots.

@@ -2,21 +2,25 @@ import SwiftUI
 import AppKit
 
 public struct MainWindowView: View {
-    @StateObject private var leftPane: PaneModel
-    @StateObject private var rightPane: PaneModel
+    @StateObject private var leftStack: PaneStack
+    @StateObject private var rightStack: PaneStack
 
-    @State private var activePaneId: UUID
+    @State private var activeSide: PaneSide = .left
     @State private var isDualPane: Bool = true
     @State private var customFavorites: [FavoriteLocation]
 
     public init(leftPane: PaneModel? = nil, rightPane: PaneModel? = nil, customFavorites: [FavoriteLocation]? = nil) {
         let lp = leftPane ?? PaneModel()
         let rp = rightPane ?? PaneModel(initialURL: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads"))
-        _leftPane = StateObject(wrappedValue: lp)
-        _rightPane = StateObject(wrappedValue: rp)
-        _activePaneId = State(initialValue: lp.id)
+        _leftStack = StateObject(wrappedValue: PaneStack(initial: lp))
+        _rightStack = StateObject(wrappedValue: PaneStack(initial: rp))
         _customFavorites = State(initialValue: customFavorites ?? [])
     }
+
+    /// The selected tab of each side; everything below works on these.
+    private var leftPane: PaneModel { leftStack.current }
+    private var rightPane: PaneModel { rightStack.current }
+    private var activeStack: PaneStack { activeSide == .right && isDualPane ? rightStack : leftStack }
 
     @Environment(\.undoManager) private var undoManager
 
@@ -35,7 +39,7 @@ public struct MainWindowView: View {
     @State private var showRemoteSearchSheet: Bool = false
 
     private var activePane: PaneModel {
-        if activePaneId == rightPane.id && isDualPane {
+        if activeSide == .right && isDualPane {
             return rightPane
         } else {
             return leftPane
@@ -43,7 +47,7 @@ public struct MainWindowView: View {
     }
 
     private var otherPane: PaneModel {
-        if activePaneId == rightPane.id && isDualPane {
+        if activeSide == .right && isDualPane {
             return leftPane
         } else {
             return rightPane
@@ -55,10 +59,7 @@ public struct MainWindowView: View {
     }
 
     private var connectedConnectionIds: Set<UUID> {
-        var ids = Set<UUID>()
-        if leftPane.isRemote, let id = leftPane.remoteConnection?.id { ids.insert(id) }
-        if rightPane.isRemote, let id = rightPane.remoteConnection?.id { ids.insert(id) }
-        return ids
+        leftStack.connectedConnectionIDs.union(rightStack.connectedConnectionIDs)
     }
 
     public var body: some View {
@@ -109,10 +110,10 @@ public struct MainWindowView: View {
                 TransferStatusBarView()
 
                 DualPaneView(
-                    leftPane: leftPane,
-                    rightPane: rightPane,
+                    leftStack: leftStack,
+                    rightStack: rightStack,
                     isDualPane: $isDualPane,
-                    activePaneId: $activePaneId,
+                    activeSide: $activeSide,
                     onOpenItem: { item in
                         if activePane.isRemote {
                             downloadAndOpenRemoteItem(item)
@@ -159,7 +160,7 @@ public struct MainWindowView: View {
                     onToggleDualPane: {
                         isDualPane.toggle()
                         if !isDualPane {
-                            activePaneId = leftPane.id
+                            activeSide = .left
                         }
                     },
                     onConnect: {
@@ -209,16 +210,16 @@ public struct MainWindowView: View {
         }
         .frame(minWidth: 800, minHeight: 520)
         .onAppear {
-            let left = leftPane, right = rightPane
+            let left = leftStack, right = rightStack
             TransferCoordinator.shared.localMoveRecorder = { [undoManager] actionName, moves in
                 LocalUndo.register(undoManager, actionName: actionName) {
                     for m in moves.reversed() {
                         _ = try await FileSystemService.shared.move(urls: [m.to], to: m.from.deletingLastPathComponent())
                     }
-                    await MainActor.run { left.reload(); right.reload() }
+                    await MainActor.run { left.current.reload(); right.current.reload() }
                 }
             }
-            activePaneId = leftPane.id
+            activeSide = .left
             if !DemoHelper.isDemoMode {
                 // Load and migrate ForkLift 2 favorites
                 let result = MigrationService.shared.migrateFromForkLift2()
@@ -286,7 +287,7 @@ public struct MainWindowView: View {
                 isEnabled: !hasActiveModal,
                 onTab: {
                     if isDualPane {
-                        activePaneId = (activePaneId == leftPane.id) ? rightPane.id : leftPane.id
+                        activeSide = (activeSide == .left) ? .right : .left
                     }
                 },
                 onSpace: {
@@ -372,6 +373,11 @@ public struct MainWindowView: View {
                 onFindOnServer: {
                     if activePane.isRemote { showRemoteSearchSheet = true }
                 },
+                onNewTab: { activeStack.newTab() },
+                onCloseTab: { activeStack.closeCurrent() },
+                onNextTab: { activeStack.selectNext() },
+                onPreviousTab: { activeStack.selectPrevious() },
+                canCloseTab: { activeStack.tabs.count > 1 },
                 onTypeChar: { char in activePane.selectMatchingPrefix(char) }
             )
         )
@@ -915,6 +921,11 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
     var onToggleFilter: (() -> Void)? = nil
     var onGoToPath: (() -> Void)? = nil
     var onFindOnServer: (() -> Void)? = nil
+    var onNewTab: (() -> Void)? = nil
+    var onCloseTab: (() -> Void)? = nil
+    var onNextTab: (() -> Void)? = nil
+    var onPreviousTab: (() -> Void)? = nil
+    var canCloseTab: (() -> Bool)? = nil
     let onTypeChar: (String) -> Void
 
     /// Testable helper verifying whether a key event should trigger file deletion (`Cmd+Backspace`, `Ctrl+Backspace`, or `Forward Delete`).
@@ -986,6 +997,11 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
         view.onToggleFilter = onToggleFilter
         view.onGoToPath = onGoToPath
         view.onFindOnServer = onFindOnServer
+        view.onNewTab = onNewTab
+        view.onCloseTab = onCloseTab
+        view.onNextTab = onNextTab
+        view.onPreviousTab = onPreviousTab
+        view.canCloseTab = canCloseTab
         view.onTypeChar = onTypeChar
     }
 
@@ -1022,6 +1038,11 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
         var onToggleFilter: (() -> Void)?
         var onGoToPath: (() -> Void)?
         var onFindOnServer: (() -> Void)?
+        var onNewTab: (() -> Void)?
+        var onCloseTab: (() -> Void)?
+        var onNextTab: (() -> Void)?
+        var onPreviousTab: (() -> Void)?
+        var canCloseTab: (() -> Bool)?
         var onTypeChar: ((String) -> Void)?
         private var monitor: Any?
 
@@ -1100,6 +1121,26 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
                         DispatchQueue.main.async {
                             self.onNewFolder?()
                         }
+                        return nil
+                    }
+
+                    // Cmd + T (New Tab) - keyCode 17
+                    if (event.keyCode == 17 || charKey == "t") && isCmd && !isShift && !isCtrl {
+                        DispatchQueue.main.async { self.onNewTab?() }
+                        return nil
+                    }
+                    // Cmd + W (Close Tab) - keyCode 13; falls through to the window when only one tab is open
+                    if (event.keyCode == 13 || charKey == "w") && isCmd && !isShift && !isCtrl, let close = self.onCloseTab, self.canCloseTab?() == true {
+                        DispatchQueue.main.async { close() }
+                        return nil
+                    }
+                    // Cmd + Shift + ] / [ (Next / Previous Tab) - keyCodes 30 / 33
+                    if (event.keyCode == 30 || charKey == "]") && isCmd && isShift {
+                        DispatchQueue.main.async { self.onNextTab?() }
+                        return nil
+                    }
+                    if (event.keyCode == 33 || charKey == "[") && isCmd && isShift {
+                        DispatchQueue.main.async { self.onPreviousTab?() }
                         return nil
                     }
 

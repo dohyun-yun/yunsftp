@@ -16,6 +16,7 @@ public struct FilePaneView: View {
     var onCompressItems: ([FileItem]) -> Void
     var onExtractArchive: (FileItem) -> Void
     var onConnect: (() -> Void)? = nil
+    var stack: PaneStack? = nil
 
     @State private var isDropTarget: Bool = false
     @AppStorage("yunsftp_welcomeDismissed") private var welcomeDismissed: Bool = false
@@ -24,6 +25,11 @@ public struct FilePaneView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            if let stack, stack.tabs.count > 1 {
+                PaneTabBar(stack: stack, onActivate: onActivate)
+                Divider()
+            }
+
             // Path Bar
             PathBreadcrumbBar(pane: pane)
                 .onTapGesture { onActivate() }

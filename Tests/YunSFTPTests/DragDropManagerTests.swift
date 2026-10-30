@@ -61,5 +61,15 @@ extension DragDropManagerTests {
         XCTAssertTrue(DragDropManager.isInternalDrop(dragged: [remote], dropped: [URL(string: "sftp://h:22/r.txt")!], hadProviders: true))
         XCTAssertFalse(DragDropManager.isInternalDrop(dragged: [remote], dropped: [URL(fileURLWithPath: "/Users/me/photo.jpg")], hadProviders: true), "stale state from a drag that ended in Finder")
         XCTAssertFalse(DragDropManager.isInternalDrop(dragged: [], dropped: [URL(fileURLWithPath: "/x")], hadProviders: true))
+
+        // Only the re-dropped subset of a stale multi-item drag is used, never the whole set.
+        let b = FileItem(url: URL(fileURLWithPath: "/tmp/b.txt"))
+        let subset = DragDropManager.internalItems(dragged: [local, b], dropped: [URL(fileURLWithPath: "/tmp/b.txt")], hadProviders: true)
+        XCTAssertEqual(subset.map(\.name), ["b.txt"])
+
+        // Trailing slashes and decomposed Unicode do not break the match.
+        let dir = FileItem(virtualURL: URL(fileURLWithPath: "/tmp/한글/", isDirectory: true), name: "한글", isDirectory: true, size: 0, modificationDate: Date(), permissions: "")
+        let nfd = URL(fileURLWithPath: "/tmp/" + "한글".decomposedStringWithCanonicalMapping)
+        XCTAssertTrue(DragDropManager.isInternalDrop(dragged: [dir], dropped: [nfd], hadProviders: true))
     }
 }

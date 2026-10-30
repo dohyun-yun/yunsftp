@@ -104,4 +104,22 @@ extension PaneNavigationModeTests {
         XCTAssertFalse(pane.navigateTo(SFTPService.sftpURL(host: "b.example", port: 22, path: "/y")))
         XCTAssertFalse(pane.navigateTo(URL(fileURLWithPath: "/definitely/not/here")))
     }
+
+    func testBackSkipsOverAFolderThatNoLongerExists() async throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("yunsftp_skip_\(UUID().uuidString)")
+        let one = base.appendingPathComponent("one"), two = base.appendingPathComponent("two"), three = base.appendingPathComponent("three")
+        for d in [one, two, three] { try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true) }
+        defer { try? FileManager.default.removeItem(at: base) }
+        let pane = PaneModel(initialURL: one)
+        pane.navigateTo(two); pane.navigateTo(three)
+        await waitUntil { !pane.isLoading }
+        try FileManager.default.removeItem(at: two)
+        pane.goBack()                                   // "two" is gone: land on "one" instead of a dead button
+        await waitUntil { !pane.isLoading }
+        XCTAssertEqual(pane.currentURL.standardizedFileURL, one.standardizedFileURL)
+        XCTAssertFalse(pane.canGoBack)
+        pane.goForward()
+        await waitUntil { !pane.isLoading }
+        XCTAssertEqual(pane.currentURL.standardizedFileURL, three.standardizedFileURL)
+    }
 }

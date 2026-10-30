@@ -228,19 +228,22 @@ public class PaneModel: ObservableObject, Identifiable {
         return true
     }
 
-    public func goBack() {
-        guard canGoBack else { return }
-        let target = historyIndex - 1
-        if navigateTo(history[target], connectionID: connectionID(forHistoryIndex: target), addToHistory: false) {
-            historyIndex = target
-        }
-    }
+    public func goBack() { step(-1) }
+    public func goForward() { step(+1) }
 
-    public func goForward() {
-        guard canGoForward else { return }
-        let target = historyIndex + 1
-        if navigateTo(history[target], connectionID: connectionID(forHistoryIndex: target), addToHistory: false) {
-            historyIndex = target
+    /// Walks the history in one direction until an entry can be shown; entries that are gone
+    /// (a server session that cannot be re-entered, a deleted folder) are dropped on the way.
+    private func step(_ direction: Int) {
+        var target = historyIndex + direction
+        while history.indices.contains(target) {
+            if navigateTo(history[target], connectionID: connectionID(forHistoryIndex: target), addToHistory: false) {
+                historyIndex = target
+                return
+            }
+            history.remove(at: target)
+            historyConnections.remove(at: target)
+            if direction < 0 { historyIndex -= 1 }
+            target = historyIndex + direction
         }
     }
 

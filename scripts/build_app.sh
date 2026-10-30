@@ -35,7 +35,7 @@ fi
 cp "$BIN_SRC" "$APP_BUNDLE/Contents/MacOS/yunsftp"
 chmod +x "$APP_BUNDLE/Contents/MacOS/yunsftp"
 
-# Copy the SwiftPM resource bundle (String Catalog) next to the binary's Resources
+# Copy the SwiftPM resource bundle (localized .strings tables) next to the binary's Resources
 RES_BUNDLE=$(find "$PROJECT_DIR/.build" -maxdepth 4 -type d -name "yunsftp_yunsftp.bundle" -path "*elease*" | head -1)
 if [ -n "$RES_BUNDLE" ]; then
     cp -R "$RES_BUNDLE" "$APP_BUNDLE/Contents/Resources/"

@@ -121,18 +121,21 @@ public final class TransferCoordinator {
     @discardableResult
     public func runAdHoc(fileName: String, direction: TransferDirection, totalBytes: Int64,
                          work: @escaping @Sendable (_ taskID: UUID) async throws -> Void,
-                         onFinished: @escaping @MainActor () -> Void = {}) -> UUID {
+                         onFinished: @escaping @MainActor (Result<Void, Error>) -> Void = { _ in }) -> UUID {
         let batchID = UUID()
         let taskID = manager.addTransfer(fileName: fileName, direction: direction, totalBytes: totalBytes, batchID: batchID)
         let task = Task { [weak self] in
+            let outcome: Result<Void, Error>
             do {
                 try await SFTPService.$currentBatch.withValue(batchID) { try await work(taskID) }
                 self?.manager.markCompleted(id: taskID)
+                outcome = .success(())
             } catch {
                 self?.finish(taskID: taskID, with: error)
+                outcome = .failure(error)
             }
             self?.batches[batchID] = nil
-            onFinished()
+            onFinished(outcome)   // the row may already be trimmed; the outcome is authoritative
         }
         batches[batchID] = task
         return batchID
@@ -182,7 +185,7 @@ public final class TransferCoordinator {
             do {
                 let samePlace = Self.isSamePlace(item: item, name: name, request: request)
                 if samePlace && request.mode == .move {
-                    throw NSError(domain: "TransferCoordinator", code: 1, userInfo: [NSLocalizedDescriptionKey: L("\"%@\" is already in that folder.", name)])
+                    throw Self.alreadyInFolderError(name)
                 }
                 var overwrite = false
                 if try await destinationExists(name: name, at: request.destination) {
@@ -204,9 +207,7 @@ public final class TransferCoordinator {
                         return
                     case .replace:
                         // Replacing a file with itself would delete it; Keep Both is the only safe copy here.
-                        if samePlace {
-                            throw NSError(domain: "TransferCoordinator", code: 1, userInfo: [NSLocalizedDescriptionKey: L("\"%@\" is already in that folder.", name)])
-                        }
+                        if samePlace { throw Self.alreadyInFolderError(name) }
                         overwrite = true
                     case .keepBoth: overwrite = false
                     }
@@ -228,6 +229,10 @@ public final class TransferCoordinator {
         }
     }
 
+    static func alreadyInFolderError(_ name: String) -> NSError {
+        NSError(domain: "TransferCoordinator", code: 1, userInfo: [NSLocalizedDescriptionKey: L("\"%@\" is already in that folder.", name)])
+    }
+
     /// True when the item already lives in the destination folder (copying a file onto itself).
     /// Local folders are compared by file-system identity (symlinks, case-insensitive volumes);
     /// servers by host, port and user, since two saved connections may point at one server.
@@ -244,8 +249,7 @@ public final class TransferCoordinator {
             return a.path.caseInsensitiveCompare(b.path) == .orderedSame
         case (.remote(let src, _, _), .remote(let dst, _, let dir)):
             let parent = (SFTPService.normalizeRemotePath(item.url.path) as NSString).deletingLastPathComponent
-            let sameServer = src.host.caseInsensitiveCompare(dst.host) == .orderedSame && src.port == dst.port && src.username == dst.username
-            return sameServer && SFTPService.normalizeRemotePath(parent.isEmpty ? "/" : parent) == SFTPService.normalizeRemotePath(dir)
+            return src.isSameServer(as: dst) && SFTPService.normalizeRemotePath(parent.isEmpty ? "/" : parent) == SFTPService.normalizeRemotePath(dir)
         default:
             return false
         }
@@ -296,7 +300,7 @@ public final class TransferCoordinator {
         case (.remote(let srcConn, let srcPwd, _), .remote(let dstConn, let dstPwd, let destDir)):
             let srcPath = SFTPService.normalizeRemotePath(item.url.path)
             manager.updateProgress(id: taskID, progress: 0.1, bytesTransferred: 0, totalBytes: size, message: "Transferring \(name)...")
-            if request.mode == .move && srcConn.id == dstConn.id {
+            if request.mode == .move && srcConn.isSameServer(as: dstConn) {
                 var targetName = name
                 let targetPath = { (n: String) in destDir == "/" ? "/\(n)" : "\(destDir)/\(n)" }
                 if overwrite {

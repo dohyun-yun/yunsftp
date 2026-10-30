@@ -1,6 +1,6 @@
 import Foundation
 
-/// Looks a user-facing string up in the app's String Catalog (`Resources/Localizable.xcstrings`).
+/// Looks a user-facing string up in `Resources/<lang>.lproj/Localizable.strings`.
 /// The English text is the key, so a missing translation falls back to it unchanged.
 public func L(_ key: String) -> String {
     return Bundle.module.localizedString(forKey: key, value: key, table: nil)

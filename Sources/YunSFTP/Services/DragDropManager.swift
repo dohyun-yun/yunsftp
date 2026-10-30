@@ -68,8 +68,9 @@ public class DragDropManager: ObservableObject {
         }
 
         group.notify(queue: .main) {
-            if Self.isInternalDrop(dragged: self.draggedItems, dropped: collectedURLs, hadProviders: !externalProviders.isEmpty) {
-                let items = self.draggedItems
+            let internalItems = Self.internalItems(dragged: self.draggedItems, dropped: collectedURLs, hadProviders: !externalProviders.isEmpty)
+            if !internalItems.isEmpty {
+                let items = internalItems
                 let srcRemote = self.sourceIsRemote
                 let srcConn = self.sourceConnection
                 let srcPwd = self.sourceRemotePassword
@@ -94,12 +95,28 @@ public class DragDropManager: ObservableObject {
         }
     }
 
-    /// An internal drop is one whose dropped URLs are the items we started dragging.
+    /// The dragged items that were actually dropped. A stale cache from a drag that ended in
+    /// another app only ever contributes the items the user dropped again, never the whole set.
+    static func internalItems(dragged: [FileItem], dropped: [URL], hadProviders: Bool) -> [FileItem] {
+        guard !dragged.isEmpty else { return [] }
+        guard hadProviders else { return dragged }
+        let droppedKeys = Set(dropped.map(normalizedKey))
+        return dragged.filter { droppedKeys.contains(normalizedKey($0.url)) }
+    }
+
     static func isInternalDrop(dragged: [FileItem], dropped: [URL], hadProviders: Bool) -> Bool {
-        guard !dragged.isEmpty else { return false }
-        guard hadProviders else { return true }
-        let ours = Set(dragged.map { $0.url.absoluteString })
-        return dropped.contains { ours.contains($0.absoluteString) }
+        !internalItems(dragged: dragged, dropped: dropped, hadProviders: hadProviders).isEmpty
+    }
+
+    /// Stable identity across the pasteboard round trip (trailing slashes, percent-encoding, NFD/NFC).
+    static func normalizedKey(_ url: URL) -> String {
+        if url.isFileURL {
+            var p = url.standardizedFileURL.path.precomposedStringWithCanonicalMapping
+            if p.count > 1 && p.hasSuffix("/") { p.removeLast() }
+            return "file:" + p
+        }
+        let path = SFTPService.normalizeRemotePath(url.path)
+        return "\(url.scheme ?? ""):\(url.host ?? ""):\(url.port ?? 22)\(path)"
     }
 
     private func executeTransfer(

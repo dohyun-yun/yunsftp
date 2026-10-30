@@ -101,6 +101,11 @@ public struct RemoteConnection: Identifiable, Codable, Hashable, Sendable {
         allowLegacyAlgorithms = try c.decodeIfPresent(Bool.self, forKey: .allowLegacyAlgorithms) ?? false
     }
 
+    /// Two saved connections can point at one server; compare the endpoint, not the id.
+    public func isSameServer(as other: RemoteConnection) -> Bool {
+        return host.caseInsensitiveCompare(other.host) == .orderedSame && port == other.port && username == other.username
+    }
+
     public var formattedPort: String {
         String(port)
     }

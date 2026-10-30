@@ -91,19 +91,17 @@ public final class RemoteEditService: ObservableObject {
         let remoteDir = parent.isEmpty ? "/" : parent
         let batch = coordinator.runAdHoc(fileName: session.fileName, direction: .upload, totalBytes: Self.size(of: session.localURL)) { _ in
             try await SFTPService.shared.upload(localURL: session.localURL, to: remoteDir, connection: session.connection, password: session.password, overwrite: true)
-        }
-        await coordinator.wait(for: batch)
-        if let i = sessions.firstIndex(where: { $0.id == sessionID }) {
-            switch coordinator.state(ofBatch: batch) {
-            case .completed?:
-                sessions[i].uploadCount += 1
-                sessions[i].lastError = nil
-            case .failed(let message)?:
-                sessions[i].lastError = message
-            default:
-                sessions[i].lastError = L("Upload did not complete.")
+        } onFinished: { [weak self] outcome in
+            guard let self, let i = self.sessions.firstIndex(where: { $0.id == sessionID }) else { return }
+            switch outcome {
+            case .success:
+                self.sessions[i].uploadCount += 1
+                self.sessions[i].lastError = nil
+            case .failure(let error):
+                self.sessions[i].lastError = SFTPService.isCancellation(error) || error is CancellationError ? L("Upload did not complete.") : error.localizedDescription
             }
         }
+        await coordinator.wait(for: batch)
     }
 
     static func modificationDate(of url: URL) -> Date? {

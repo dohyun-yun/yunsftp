@@ -44,9 +44,9 @@ Legend as above. Order = execution order.
 - [x] 23. Release workflow: on `v*` tag build the app, create dmg/zip/checksums and attach to the GitHub Release (signing/notarization steps run only when secrets exist).
 - [x] 24. Fix Swift 6 strict-concurrency warnings (ConnectionTestService captured var).
 - [x] 25. Settings window: font size, relative dates, visible columns, delete confirmation, terminal app, default legacy-algorithms flag.
-- [ ] 26. Import hosts from `~/.ssh/config` (and Cyberduck bookmarks if present) with a first-run empty state that offers it.
+- [x] 26. Import hosts from `~/.ssh/config` (and Cyberduck bookmarks if present) with a first-run empty state that offers it.
 - [x] 27. List polish: relative dates by default, Perms hidden by default, `Kind` without "Remote" prefix, checkmark only for multi-selection, columns auto-hide in narrow panes.
-- [ ] 28. Filter field hidden until `Cmd+F`; `Cmd+Shift+G` go-to-path; pane header shows one connection chip (no duplicate breadcrumb root).
+- [x] 28. Filter field hidden until `Cmd+F`; `Cmd+Shift+G` go-to-path; pane header shows one connection chip (no duplicate breadcrumb root).
 - [ ] 29. Toolbar: six primary actions + overflow menu, user-customizable, accessibility labels on every icon-only control.
 - [ ] 30. Sidebar: status dot instead of "ONLINE" pill, hover-only edit button, no truncation at default width.
 - [ ] 31. Typography and color: system text styles instead of 9–11pt hardcoded sizes; semantic colors; light-mode pass.

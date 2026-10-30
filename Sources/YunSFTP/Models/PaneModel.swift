@@ -33,6 +33,20 @@ public class PaneModel: ObservableObject, Identifiable {
     @Published public var showHiddenFiles: Bool = false
     @Published public var viewMode: ViewMode = .list
     @Published public var searchQuery: String = ""
+    /// Filter field is hidden until Cmd+F (or while a query is active).
+    @Published public var isFilterVisible: Bool = false
+    public var shouldShowFilter: Bool { isFilterVisible || !searchQuery.isEmpty }
+    /// Incremented by Cmd+Shift+G; the breadcrumb bar observes it and opens the path editor.
+    @Published public var pathEditRequest: Int = 0
+
+    public func toggleFilter() {
+        if shouldShowFilter {
+            isFilterVisible = false
+            searchQuery = ""
+        } else {
+            isFilterVisible = true
+        }
+    }
     @Published public var isLoading: Bool = false
     @Published public var errorMessage: String? = nil
     @Published public var isConnecting: Bool = false

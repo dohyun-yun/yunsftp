@@ -17,6 +17,7 @@ public struct FilePaneView: View {
     var onExtractArchive: (FileItem) -> Void
 
     @State private var isDropTarget: Bool = false
+    @FocusState private var isFilterFocused: Bool
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -26,30 +27,44 @@ public struct FilePaneView: View {
 
             // Pane Control Bar (Filter, View Modes, Hidden Files)
             HStack(spacing: 8) {
-                // Search Field
-                HStack(spacing: 4) {
+                // Filter toggle; the field itself appears only on demand (Cmd+F)
+                Button(action: {
+                    onActivate()
+                    pane.toggleFilter()
+                }) {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
                         .font(.system(size: 11))
-                    TextField("Filter...", text: $pane.searchQuery)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 11))
-                        .onTapGesture { onActivate() }
-                    if !pane.searchQuery.isEmpty {
-                        Button(action: { pane.searchQuery = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                        .foregroundColor(pane.shouldShowFilter ? .accentColor : .secondary)
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(Color(NSColor.textBackgroundColor))
-                .cornerRadius(5)
-                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.2), lineWidth: 0.5))
-                .frame(maxWidth: 180)
+                .buttonStyle(.plain)
+                .help("Filter this folder (Cmd+F)")
+                .accessibilityLabel("Filter")
+
+                if pane.shouldShowFilter {
+                    HStack(spacing: 4) {
+                        TextField("Filter...", text: $pane.searchQuery)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 11))
+                            .focused($isFilterFocused)
+                            .onTapGesture { onActivate() }
+                            .onExitCommand { pane.toggleFilter() }
+                        if !pane.searchQuery.isEmpty {
+                            Button(action: { pane.searchQuery = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(5)
+                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.2), lineWidth: 0.5))
+                    .frame(maxWidth: 180)
+                    .onAppear { isFilterFocused = true }
+                }
 
                 Spacer()
 

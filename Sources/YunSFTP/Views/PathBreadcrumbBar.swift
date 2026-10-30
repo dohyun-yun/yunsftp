@@ -4,6 +4,7 @@ public struct PathBreadcrumbBar: View {
     @ObservedObject var pane: PaneModel
     @State private var isEditingPath = false
     @State private var customPathText = ""
+    @FocusState private var isPathFieldFocused: Bool
 
     public var body: some View {
         HStack(spacing: 6) {
@@ -109,6 +110,9 @@ public struct PathBreadcrumbBar: View {
                     })
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 12))
+                    .focused($isPathFieldFocused)
+                    .onExitCommand { isEditingPath = false }
+                    .onAppear { isPathFieldFocused = true }
 
                     Button("Go") {
                         applyCustomPath()
@@ -211,6 +215,10 @@ public struct PathBreadcrumbBar: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(Color(NSColor.controlBackgroundColor))
+        .onChange(of: pane.pathEditRequest) { _ in
+            customPathText = pane.isRemote ? pane.remotePath : pane.currentURL.path
+            isEditingPath = true
+        }
     }
 
     private struct PathItem {
@@ -225,7 +233,7 @@ public struct PathBreadcrumbBar: View {
         if pane.isRemote, let conn = pane.remoteConnection {
             var items: [PathItem] = []
             let serverURL = SFTPService.sftpURL(host: conn.host, port: conn.port, path: "/")
-            items.append(PathItem(name: conn.displayTitle, url: serverURL, isRoot: true, isHome: false, remotePath: "/"))
+            items.append(PathItem(name: "/", url: serverURL, isRoot: true, isHome: false, remotePath: "/"))
 
             let cleanPath = SFTPService.decodeLsEscapes(pane.remotePath).precomposedStringWithCanonicalMapping
             let segments = cleanPath.split(separator: "/").map(String.init)

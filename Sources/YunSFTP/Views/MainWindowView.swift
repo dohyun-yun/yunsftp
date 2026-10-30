@@ -261,8 +261,12 @@ public struct MainWindowView: View {
                     activePane.toggleSelectionAtFocus()
                 },
                 onEscape: {
-                    leftPane.clearSelection()
-                    rightPane.clearSelection()
+                    if activePane.shouldShowFilter {
+                        activePane.toggleFilter()
+                    } else {
+                        leftPane.clearSelection()
+                        rightPane.clearSelection()
+                    }
                 },
                 onQuickLook: {
                     if let first = activePane.firstSelectedItem {
@@ -326,6 +330,12 @@ public struct MainWindowView: View {
                 },
                 onToggleHidden: {
                     activePane.showHiddenFiles.toggle()
+                },
+                onToggleFilter: {
+                    activePane.toggleFilter()
+                },
+                onGoToPath: {
+                    activePane.pathEditRequest += 1
                 },
                 onTypeChar: { char in activePane.selectMatchingPrefix(char) }
             )
@@ -1169,6 +1179,8 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
     var onGoBack: (() -> Void)? = nil
     var onGoForward: (() -> Void)? = nil
     var onToggleHidden: (() -> Void)? = nil
+    var onToggleFilter: (() -> Void)? = nil
+    var onGoToPath: (() -> Void)? = nil
     let onTypeChar: (String) -> Void
 
     /// Testable helper verifying whether a key event should trigger file deletion (`Cmd+Backspace`, `Ctrl+Backspace`, or `Forward Delete`).
@@ -1237,6 +1249,8 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
         view.onGoBack = onGoBack
         view.onGoForward = onGoForward
         view.onToggleHidden = onToggleHidden
+        view.onToggleFilter = onToggleFilter
+        view.onGoToPath = onGoToPath
         view.onTypeChar = onTypeChar
     }
 
@@ -1270,6 +1284,8 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
         var onGoBack: (() -> Void)?
         var onGoForward: (() -> Void)?
         var onToggleHidden: (() -> Void)?
+        var onToggleFilter: (() -> Void)?
+        var onGoToPath: (() -> Void)?
         var onTypeChar: ((String) -> Void)?
         private var monitor: Any?
 
@@ -1348,6 +1364,18 @@ public struct KeyboardShortcutHelper: NSViewRepresentable {
                         DispatchQueue.main.async {
                             self.onNewFolder?()
                         }
+                        return nil
+                    }
+
+                    // Cmd + F (Filter) - keyCode 3
+                    if (event.keyCode == 3 || charKey == "f") && isCmd && !isShift && !isCtrl {
+                        DispatchQueue.main.async { self.onToggleFilter?() }
+                        return nil
+                    }
+
+                    // Cmd + Shift + G (Go to Folder) - keyCode 5
+                    if (event.keyCode == 5 || charKey == "g") && isCmd && isShift {
+                        DispatchQueue.main.async { self.onGoToPath?() }
                         return nil
                     }
 

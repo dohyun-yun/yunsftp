@@ -110,6 +110,51 @@ public actor SFTPService {
     /// Transfer batch that owns the current task tree; set by `TransferCoordinator`.
     @TaskLocal public static var currentBatch: UUID?
 
+    // MARK: - Engine selection
+
+    public enum EngineUsed: String, Sendable { case native, openSSH }
+
+    /// Tests pin the engine; the app reads the user's setting.
+    public static var engineOverride: TransferEngine?
+
+    /// The user's engine preference, pushed by `SettingsStore` so operations never hit UserDefaults.
+    private static let preferenceLock = NSLock()
+    nonisolated(unsafe) private static var _enginePreference: TransferEngine = AppSettings.load().transferEngine
+    public static var enginePreference: TransferEngine {
+        get { preferenceLock.lock(); defer { preferenceLock.unlock() }; return _enginePreference }
+        set { preferenceLock.lock(); _enginePreference = newValue; preferenceLock.unlock() }
+    }
+
+    /// Connections (by session fingerprint, so an edit resets it) the native engine could not
+    /// handle in this session: unsupported key, keyboard-interactive only, algorithm negotiation…
+    private var nativeFallback: Set<String> = []
+    public private(set) var lastEngineUsed: [UUID: EngineUsed] = [:]
+
+    func useNative(for connection: RemoteConnection) -> Bool {
+        let engine = Self.engineOverride ?? Self.enginePreference
+        return engine == .native
+            && !connection.allowLegacyAlgorithms
+            && connection.host != "local-sftp-server"
+            && !nativeFallback.contains(connection.sessionFingerprint)
+    }
+
+    /// Runs `op` on the native engine. Returns nil (and remembers the fallback) when the engine
+    /// cannot serve this connection, so the caller continues with the OpenSSH transport.
+    private func viaNative<T>(_ connection: RemoteConnection, _ op: () async throws -> T) async throws -> T? {
+        guard useNative(for: connection) else { return nil }
+        do {
+            let result = try await op()
+            lastEngineUsed[connection.id] = .native
+            return result
+        } catch let unsupported as NativeSFTPEngine.EngineUnsupported {
+            if unsupported.pinsFallback { nativeFallback.insert(connection.sessionFingerprint) }
+            lastEngineUsed[connection.id] = .openSSH
+            return nil
+        }
+    }
+
+    public func forgetFallbacks() { nativeFallback.removeAll() }
+
     /// Normalizes a remote path: decodes escapes, converts to NFC, collapses multiple slashes, and strips trailing slash
     public static func normalizeRemotePath(_ path: String) -> String {
         let decoded = decodeLsEscapes(path).precomposedStringWithCanonicalMapping
@@ -266,6 +311,11 @@ public actor SFTPService {
         }
 
         let targetPath = Self.normalizeRemotePath(path)
+        let nativePwd = resolvePassword(password: password, connection: connection)
+        if let items = try await viaNative(connection, { try await NativeSFTPEngine.shared.listDirectory(path: targetPath, connection: connection, password: nativePwd) }) {
+            return items
+        }
+        lastEngineUsed[connection.id] = .openSSH
 
         // 1. Primary approach: SFTP Batch using 'cd' then bare 'ls -la' with -o BatchMode=no
         // This natively respects SFTP root/chroot shares (e.g. /video on Synology) and works for Korean, spaces, brackets, etc.
@@ -375,7 +425,8 @@ public actor SFTPService {
     /// local item with the same name is kept and the download gets a " 2" suffix. The file is
     /// staged in the temp folder and moved into place on success, so a failed or cancelled
     /// download never leaves a partial file in the destination.
-    public func download(remotePath: String, to localDirectory: URL, connection: RemoteConnection, password: String?, overwrite: Bool = false) async throws -> URL {
+    public func download(remotePath: String, to localDirectory: URL, connection: RemoteConnection, password: String?, overwrite: Bool = false,
+                         progress: (@Sendable (Int64) -> Void)? = nil) async throws -> URL {
         let cleanRemotePath = Self.normalizeRemotePath(remotePath)
         let fileName = (cleanRemotePath as NSString).lastPathComponent
         let parentDir = (cleanRemotePath as NSString).deletingLastPathComponent
@@ -401,6 +452,9 @@ public actor SFTPService {
             ["lcd \(Self.sftpQuote(stagingDir.path))", "get -R \(Self.sftpQuote(cleanRemotePath)) \(Self.sftpQuote(destName))"]
         ]
         var staged = false
+        if try await viaNative(connection, { try await NativeSFTPEngine.shared.download(remotePath: cleanRemotePath, to: stagedURL, connection: connection, password: effectivePwd, progress: progress) }) != nil {
+            staged = FileManager.default.fileExists(atPath: stagedURL.path)
+        }
         for commands in batchAttempts where !staged {
             do {
                 _ = try await executeSFTPBatch(commands: commands, connection: connection, password: effectivePwd, isTransfer: true)
@@ -448,9 +502,10 @@ public actor SFTPService {
         return text.contains("local") && (text.contains("operation not permitted") || text.contains("permission denied"))
     }
 
-    public func upload(localURL: URL, to remoteDirectoryPath: String, connection: RemoteConnection, password: String?, overwrite: Bool = false) async throws {
+    public func upload(localURL: URL, to remoteDirectoryPath: String, connection: RemoteConnection, password: String?, overwrite: Bool = false,
+                       progress: (@Sendable (Int64) -> Void)? = nil) async throws {
         do {
-            try await uploadDirectly(localURL: localURL, to: remoteDirectoryPath, connection: connection, password: password, overwrite: overwrite)
+            try await uploadDirectly(localURL: localURL, to: remoteDirectoryPath, connection: connection, password: password, overwrite: overwrite, progress: progress)
         } catch where Self.isLocalAccessDenied(error) {
             // Copy with the app's own permission into the temp folder, then upload from there.
             let staged = Self.stagedURL(for: localURL)
@@ -459,11 +514,12 @@ public actor SFTPService {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: dir) }
             try FileManager.default.copyItem(at: localURL, to: staged)
-            try await uploadDirectly(localURL: staged, to: remoteDirectoryPath, connection: connection, password: password, overwrite: overwrite)
+            try await uploadDirectly(localURL: staged, to: remoteDirectoryPath, connection: connection, password: password, overwrite: overwrite, progress: progress)
         }
     }
 
-    private func uploadDirectly(localURL: URL, to remoteDirectoryPath: String, connection: RemoteConnection, password: String?, overwrite: Bool) async throws {
+    private func uploadDirectly(localURL: URL, to remoteDirectoryPath: String, connection: RemoteConnection, password: String?, overwrite: Bool,
+                                progress: (@Sendable (Int64) -> Void)? = nil) async throws {
         let cleanRemoteDir = Self.normalizeRemotePath(remoteDirectoryPath)
         let fileName = localURL.lastPathComponent.precomposedStringWithCanonicalMapping
         let localParentDir = localURL.deletingLastPathComponent().path
@@ -474,6 +530,9 @@ public actor SFTPService {
             remoteName = try await uniqueRemoteName(fileName, in: cleanRemoteDir, connection: connection, password: effectivePwd)
         }
         let remoteDest = cleanRemoteDir == "/" ? "/\(remoteName)" : "\(cleanRemoteDir)/\(remoteName)"
+        if try await viaNative(connection, { try await NativeSFTPEngine.shared.upload(localURL: localURL, to: remoteDest, connection: connection, password: effectivePwd, progress: progress) }) != nil {
+            return
+        }
 
         // 1. Primary: SFTP batch using lcd (local parent) + cd (remote dir) + put -R (filename)
         let sftpCommands: [String] = [
@@ -513,6 +572,9 @@ public actor SFTPService {
     /// True when `remotePath` exists (file or directory). Only an explicit "not found" means
     /// absent; auth failures, timeouts, permission errors and cancellation propagate.
     func remoteExists(_ remotePath: String, connection: RemoteConnection, password: String?) async throws -> Bool {
+        if let exists = try await viaNative(connection, { try await NativeSFTPEngine.shared.exists(path: remotePath, connection: connection, password: resolvePassword(password: password, connection: connection)) }) {
+            return exists
+        }
         do {
             _ = try await executeSFTPBatch(commands: ["ls -la \(Self.sftpQuote(remotePath))"], connection: connection, password: password)
             return true
@@ -538,6 +600,7 @@ public actor SFTPService {
     public func createDirectory(remotePath: String, connection: RemoteConnection, password: String?) async throws {
         let effectivePwd = resolvePassword(password: password, connection: connection)
         let nfc = Self.normalizeRemotePath(remotePath)
+        if try await viaNative(connection, { try await NativeSFTPEngine.shared.createDirectory(path: nfc, connection: connection, password: effectivePwd) }) != nil { return }
         let parent = (nfc as NSString).deletingLastPathComponent
         let dirName = (nfc as NSString).lastPathComponent
         let cleanParent = parent.isEmpty ? "/" : parent
@@ -567,6 +630,7 @@ public actor SFTPService {
     public func remove(remotePath: String, isDirectory: Bool, connection: RemoteConnection, password: String?) async throws {
         let effectivePwd = resolvePassword(password: password, connection: connection)
         let nfc = Self.normalizeRemotePath(remotePath)
+        if try await viaNative(connection, { try await NativeSFTPEngine.shared.remove(path: nfc, isDirectory: isDirectory, connection: connection, password: effectivePwd) }) != nil { return }
         let parent = (nfc as NSString).deletingLastPathComponent
         let targetName = (nfc as NSString).lastPathComponent
         let cleanParent = parent.isEmpty ? "/" : parent
@@ -646,6 +710,7 @@ public actor SFTPService {
         let effectivePwd = resolvePassword(password: password, connection: connection)
         let nfcSrc = Self.normalizeRemotePath(remotePath)
         let nfcDst = Self.normalizeRemotePath(newRemotePath)
+        if try await viaNative(connection, { try await NativeSFTPEngine.shared.rename(path: nfcSrc, to: nfcDst, connection: connection, password: effectivePwd) }) != nil { return }
 
         let parentSrc = (nfcSrc as NSString).deletingLastPathComponent
         let parentDst = (nfcDst as NSString).deletingLastPathComponent
@@ -682,6 +747,8 @@ public actor SFTPService {
     public func chmod(remotePath: String, mode: String, recursive: Bool = false, connection: RemoteConnection, password: String?) async throws {
         let effectivePwd = resolvePassword(password: password, connection: connection)
         let nfc = Self.normalizeRemotePath(remotePath)
+        if let octal = Int(mode, radix: 8),
+           try await viaNative(connection, { try await NativeSFTPEngine.shared.chmod(path: nfc, mode: octal, recursive: recursive, connection: connection, password: effectivePwd) }) != nil { return }
         let parent = (nfc as NSString).deletingLastPathComponent
         let targetName = (nfc as NSString).lastPathComponent
         let cleanParent = parent.isEmpty ? "/" : parent

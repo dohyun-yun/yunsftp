@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/dohyun-yun/yunsftp/releases/latest"><strong>macOS용 다운로드</strong></a> · macOS 13 이상 · Apple Silicon
+  <a href="https://github.com/dohyun-yun/yunsftp/releases/latest"><strong>macOS용 다운로드</strong></a> · macOS 14 이상 · Apple Silicon
 </p>
 
 ## 왜 yunsftp인가
@@ -80,7 +80,7 @@ brew install --cask yunsftp
 
 ## 보안과 개인정보
 
-- 전송은 시스템 OpenSSH(`sftp`, `ssh`, `scp`)로 수행합니다. 세션을 재사용하므로 한 번 로그인으로 여러 작업을 처리합니다.
+- 전송은 [swift-nio-ssh](https://github.com/apple/swift-nio-ssh) 기반 [Citadel](https://github.com/orlandos-nl/Citadel)로 만든 네이티브 SSH/SFTP 엔진이 수행합니다. 서버당 세션 하나, 바이트 단위 진행률, 별도 프로세스 없음. 처리할 수 없는 서버나 키(SHA-1 전용 장비, `ssh-agent`의 암호 키)는 시스템 OpenSSH 도구로 자동 전환되며 설정에서 엔진을 고정할 수도 있습니다.
 - 서버 키는 `~/.ssh/known_hosts`로 검증합니다(최초 접속 시 신뢰). 키가 바뀌면 연결을 중단하고 이유를 알려 줍니다.
 - 알고리즘은 OpenSSH 기본값입니다. 오래된 장비를 위한 **레거시 SSH 알고리즘 허용** 스위치는 연결별로 있고 기본은 꺼져 있습니다.
 - 비밀번호는 macOS 키체인에 저장되며, `0700` 권한으로 만든 일회용 헬퍼를 통해 OpenSSH에 전달됩니다.
@@ -134,11 +134,11 @@ DSM의 SFTP는 활성화한 공유 폴더로 chroot됩니다. 서버가 보여 �
 
 ## 로드맵
 
-진행 상황은 [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md)에서 추적합니다. 다음 순서는 바이트 단위 진행률과 이어받기를 위한 네이티브 SFTP 엔진, SwiftUI `Table` 기반 파일 목록입니다. 공증은 당분간 계획에 없으며 Homebrew cask와 위의 첫 실행 안내로 설치를 안내합니다.
+진행 상황은 [docs/IMPROVEMENT_PLAN.md](docs/IMPROVEMENT_PLAN.md)에서 추적합니다. 다음 순서는 SwiftUI `Table` 기반 파일 목록과 네이티브 엔진의 이어받기입니다. 공증은 당분간 계획에 없으며 Homebrew cask와 위의 첫 실행 안내로 설치를 안내합니다.
 
 ## 소스에서 빌드
 
-요구 사항: Apple Silicon Mac, Xcode 16 이상(Swift 6 툴체인). 앱 자체는 macOS 13 이상에서 실행됩니다.
+요구 사항: Apple Silicon Mac, Xcode 16 이상(Swift 6 툴체인). 앱 자체는 macOS 14 이상에서 실행됩니다.
 
 ```bash
 git clone https://github.com/dohyun-yun/yunsftp.git

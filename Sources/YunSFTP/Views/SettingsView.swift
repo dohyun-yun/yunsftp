@@ -56,6 +56,15 @@ public struct SettingsView: View {
 
     private var connectionsTab: some View {
         Form {
+            Picker(L("Transfer engine"), selection: $store.settings.transferEngine) {
+                Text(L("Native (recommended)")).tag(TransferEngine.native)
+                Text(L("OpenSSH command-line tools")).tag(TransferEngine.openSSH)
+            }
+            .pickerStyle(.radioGroup)
+            Text(L("The native engine gives byte-level progress and faster operations. OpenSSH is used automatically for servers or keys it cannot handle."))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Divider()
             Toggle(L("Allow legacy SSH algorithms on new connections"), isOn: $store.settings.legacyAlgorithmsByDefault)
             Text("Only needed for old devices that fail with \"no matching key exchange method\". Existing connections keep their own setting.")
                 .font(.callout)

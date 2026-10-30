@@ -20,6 +20,12 @@ public enum TerminalApp: String, CaseIterable, Identifiable, Codable, Sendable {
     public var id: String { rawValue }
 }
 
+public enum TransferEngine: String, CaseIterable, Identifiable, Codable, Sendable {
+    case native = "Native"
+    case openSSH = "OpenSSH"
+    public var id: String { rawValue }
+}
+
 public struct AppSettings: Codable, Sendable, Equatable {
     public var sortField: SortField = .date
     public var sortAscending: Bool = false
@@ -36,6 +42,8 @@ public struct AppSettings: Codable, Sendable, Equatable {
     public var terminalApp: TerminalApp = .terminal
     public var legacyAlgorithmsByDefault: Bool = false
     public var checkForUpdates: Bool = true
+    /// Native swift-nio-ssh engine by default; OpenSSH command-line tools as fallback or on request.
+    public var transferEngine: TransferEngine = .native
     public var tools: [CustomTool] = []
 
     public static let fontSizeRange: ClosedRange<Double> = 10...14
@@ -61,6 +69,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         terminalApp = try c.decodeIfPresent(TerminalApp.self, forKey: .terminalApp) ?? terminalApp
         legacyAlgorithmsByDefault = try c.decodeIfPresent(Bool.self, forKey: .legacyAlgorithmsByDefault) ?? legacyAlgorithmsByDefault
         checkForUpdates = try c.decodeIfPresent(Bool.self, forKey: .checkForUpdates) ?? checkForUpdates
+        transferEngine = try c.decodeIfPresent(TransferEngine.self, forKey: .transferEngine) ?? transferEngine
         tools = try c.decodeIfPresent([CustomTool].self, forKey: .tools) ?? tools
     }
 
@@ -85,7 +94,10 @@ public final class SettingsStore: ObservableObject {
     public static let shared = SettingsStore()
 
     @Published public var settings: AppSettings {
-        didSet { settings.save(to: defaults) }
+        didSet {
+            settings.save(to: defaults)
+            if self === SettingsStore.shared { SFTPService.enginePreference = settings.transferEngine }
+        }
     }
     private let defaults: UserDefaults
 

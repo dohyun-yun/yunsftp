@@ -5,7 +5,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+- Native SSH/SFTP engine (Citadel / swift-nio-ssh): persistent session per server, byte-level transfer progress, directory listings from the protocol instead of `ls` parsing, known_hosts trust-on-first-use. The OpenSSH transport remains as automatic fallback and can be pinned in Settings → Connections.
+
+### Changed
+- Minimum macOS version is now 14 (Sonoma), required by the native engine.
 
 ## [1.1.1] - 2026-10-30
 

@@ -285,14 +285,16 @@ public final class TransferCoordinator {
             let plannedURL = overwrite ? destDir.appendingPathComponent(name) : FileSystemService.plannedDestinationURL(fileName: name, in: destDir)
             let monitor = monitorGrowth(of: SFTPService.stagedURL(for: plannedURL), expected: size, taskID: taskID, verb: "Downloading", name: name)
             defer { monitor.cancel() }
-            _ = try await SFTPService.shared.download(remotePath: remotePath, to: destDir, connection: conn, password: pwd, overwrite: overwrite)
+            _ = try await SFTPService.shared.download(remotePath: remotePath, to: destDir, connection: conn, password: pwd, overwrite: overwrite,
+                                                      progress: progressReporter(taskID: taskID, expected: size, verb: "Downloading", name: name))
             if request.mode == .move {
                 try await SFTPService.shared.remove(remotePath: remotePath, isDirectory: item.isDirectory, connection: conn, password: pwd)
             }
 
         case (.local, .remote(let conn, let pwd, let destDir)):
-            manager.updateProgress(id: taskID, progress: 0.1, bytesTransferred: 0, totalBytes: size, message: "Uploading \(name)...")
-            try await SFTPService.shared.upload(localURL: item.url, to: destDir, connection: conn, password: pwd, overwrite: overwrite)
+            manager.updateProgress(id: taskID, progress: 0.05, bytesTransferred: 0, totalBytes: size, message: "Uploading \(name)...")
+            try await SFTPService.shared.upload(localURL: item.url, to: destDir, connection: conn, password: pwd, overwrite: overwrite,
+                                                progress: progressReporter(taskID: taskID, expected: size, verb: "Uploading", name: name))
             if request.mode == .move {
                 try await FileSystemService.shared.moveToTrash(urls: [item.url])
             }
@@ -319,6 +321,36 @@ public final class TransferCoordinator {
                     try await SFTPService.shared.remove(remotePath: srcPath, isDirectory: item.isDirectory, connection: srcConn, password: srcPwd)
                 }
             }
+        }
+    }
+
+    /// Byte-level progress from the native engine (the OpenSSH transport never calls it).
+    private func progressReporter(taskID: UUID, expected: Int64, verb: String, name: String) -> @Sendable (Int64) -> Void {
+        let manager = self.manager
+        let throttle = ProgressThrottle()
+        return { bytes in
+            guard throttle.shouldReport(bytes: bytes, expected: expected) else { return }
+            Task { @MainActor in
+                let fraction = expected > 0 ? min(0.99, Double(bytes) / Double(expected)) : 0.5
+                manager.updateProgress(id: taskID, progress: fraction, bytesTransferred: bytes, totalBytes: expected, message: "\(verb) \(name)...")
+            }
+        }
+    }
+
+    /// Limits UI updates to one per 1% or 200 ms, whichever comes first; the final byte count always passes.
+    final class ProgressThrottle: @unchecked Sendable {
+        private let lock = NSLock()
+        private var lastBytes: Int64 = -1
+        private var lastTime = Date.distantPast
+        func shouldReport(bytes: Int64, expected: Int64, now: Date = Date()) -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            // Directory transfers report the entry's own size as `expected`; once bytes overshoot
+            // it the total is unknown, so only the step/time rule applies (no per-chunk storm).
+            let complete = expected > 0 && bytes == expected
+            let step = max(expected / 100, 64 * 1024)
+            guard complete || bytes - lastBytes >= step || now.timeIntervalSince(lastTime) >= 0.2 else { return false }
+            lastBytes = bytes; lastTime = now
+            return true
         }
     }
 

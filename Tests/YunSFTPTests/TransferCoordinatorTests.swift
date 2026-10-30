@@ -197,3 +197,25 @@ extension TransferCoordinatorTests {
         XCTAssertFalse(coordinator.canRetry(taskID: id))
     }
 }
+
+extension TransferCoordinatorTests {
+    func testProgressThrottleReportsPercentStepsAndFinalByte() {
+        let t = TransferCoordinator.ProgressThrottle()
+        let now = Date()
+        XCTAssertTrue(t.shouldReport(bytes: 0, expected: 10_000_000, now: now))
+        XCTAssertFalse(t.shouldReport(bytes: 50_000, expected: 10_000_000, now: now), "less than 1% and 200 ms: skipped")
+        XCTAssertTrue(t.shouldReport(bytes: 150_000, expected: 10_000_000, now: now), ">= 1%")
+        XCTAssertTrue(t.shouldReport(bytes: 160_000, expected: 10_000_000, now: now.addingTimeInterval(0.3)), "time-based")
+        XCTAssertTrue(t.shouldReport(bytes: 10_000_000, expected: 10_000_000, now: now), "completion always reported")
+    }
+}
+
+extension TransferCoordinatorTests {
+    func testProgressThrottleTreatsOvershootAsUnknownTotal() {
+        let t = TransferCoordinator.ProgressThrottle()
+        let now = Date()
+        XCTAssertTrue(t.shouldReport(bytes: 4096, expected: 4096, now: now))                 // "folder size" reached
+        XCTAssertFalse(t.shouldReport(bytes: 8192, expected: 4096, now: now), "past the nominal total: step/time rule, not every chunk")
+        XCTAssertTrue(t.shouldReport(bytes: 4096 + 70_000, expected: 4096, now: now), "64 KB step")
+    }
+}

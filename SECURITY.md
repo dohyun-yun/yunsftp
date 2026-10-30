@@ -8,8 +8,9 @@ You should receive an acknowledgement within 7 days.
 
 ## Scope and design notes
 
-yunsftp drives the system OpenSSH binaries (`/usr/bin/ssh`, `sftp`, `scp`) rather than
-bundling its own SSH implementation.
+yunsftp uses a native SSH/SFTP engine (Citadel on swift-nio-ssh, Apache-2.0) and falls back to
+the system OpenSSH binaries (`/usr/bin/ssh`, `sftp`, `scp`) for servers or keys the engine
+cannot handle. Both paths verify host keys against `~/.ssh/known_hosts`.
 
 - Host keys are verified against `~/.ssh/known_hosts` with `StrictHostKeyChecking=accept-new`
   (trust on first use). A changed host key aborts the connection.

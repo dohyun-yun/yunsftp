@@ -5,7 +5,7 @@ let package = Package(
     name: "yunsftp",
     defaultLocalization: "en",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .executable(
@@ -13,11 +13,16 @@ let package = Package(
             targets: ["yunsftp"]
         )
     ],
-    dependencies: [],
+    dependencies: [
+        // Native SSH/SFTP engine (swift-nio-ssh based); the OpenSSH process transport remains as fallback.
+        .package(url: "https://github.com/orlandos-nl/Citadel.git", from: "0.12.1")
+    ],
     targets: [
         .executableTarget(
             name: "yunsftp",
-            dependencies: [],
+            dependencies: [
+                .product(name: "Citadel", package: "Citadel")
+            ],
             path: "Sources/YunSFTP",
             resources: [.process("Resources")]
         ),

@@ -137,3 +137,7 @@
 "You're up to date" = "최신 버전입니다";
 "yunsftp %@ is available" = "yunsftp %@ 사용 가능";
 "yunsftp %@ is the latest version." = "yunsftp %@이(가) 최신 버전입니다.";
+"Transfer engine" = "전송 엔진";
+"Native (recommended)" = "네이티브 (권장)";
+"OpenSSH command-line tools" = "OpenSSH 명령줄 도구";
+"The native engine gives byte-level progress and faster operations. OpenSSH is used automatically for servers or keys it cannot handle." = "네이티브 엔진은 바이트 단위 진행률과 더 빠른 동작을 제공합니다. 처리할 수 없는 서버나 키에는 OpenSSH가 자동으로 사용됩니다.";
